@@ -423,3 +423,18 @@ test('floor gate: seal is broken and the hero travels onto the new floor', async
   assert.deepEqual([tr.body.floor, tr.body.zoneIndex], [2, 0]);
   assert.ok(log.some((l) => l.includes('Travel ke')));
 });
+
+test('share nudge once per day, approval announced once', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  srv.daily.community = { status: 'NOT_SUBMITTED', xUsername: 'ry' };
+  const a = await runRound(game, store);
+  assert.ok(a.log.some((l) => l.includes('Share your run')));
+  game.forget('daily');
+  const b = await runRound(game, store);
+  assert.ok(!b.log.some((l) => l.includes('Share your run')));
+  srv.daily.community = { status: 'APPROVED', xUsername: 'ry' };
+  game.forget('daily');
+  const c2 = await runRound(game, store);
+  assert.ok(c2.log.some((l) => l.includes('disetujui')));
+});

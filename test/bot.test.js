@@ -139,3 +139,24 @@ test('no session but a key: the bot signs in by itself', async () => {
   await h.text('/start');
   assert.match(h.lastText(), /TestHero/);
 });
+
+test('share your run: link X, wrong account refused, right post submitted', async () => {
+  const h = await harness();
+  await h.press('share:menu');
+  assert.match(h.lastText(), /Hubungkan akun X/);
+  await h.press('share:link');
+  const linkMsg = [...h.sent].reverse().find((x) => x.payload.reply_markup?.inline_keyboard?.[0]?.[0]?.url);
+  assert.match(linkMsg.payload.reply_markup.inline_keyboard[0][0].url, /oauth2/);
+  h.srv.daily.community = { status: 'NOT_SUBMITTED', xUsername: 'RyHood' };
+  h.game.forget('daily');
+  await h.press('share:menu');
+  const menu = [...h.sent].reverse().find((x) => x.payload.text?.includes('X terhubung'));
+  assert.ok(menu.payload.reply_markup.inline_keyboard.some((r) => r[0].url?.startsWith('https://x.com/intent/tweet?text=')));
+  await h.press('share:submit');
+  await h.text('https://x.com/someoneelse/status/111');
+  assert.match(h.lastText(), /akun X yang terhubung @RyHood/);
+  await h.press('share:submit');
+  await h.text('https://twitter.com/ryhood/status/222?s=20');
+  assert.equal(h.srv.daily.community.status, 'PENDING_REVIEW');
+  assert.equal(h.srv.daily.community.tweetUrl, 'https://x.com/ryhood/status/222');
+});

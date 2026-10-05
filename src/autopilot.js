@@ -232,6 +232,29 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     if (got.length) log.push('📜 Quest diklaim: ' + got.join(', '));
   });
 
+  // Daily nudge for "Share your run" (5,000 $LM). Posting stays a human tap.
+  await step('Share', async () => {
+    if (!s.alertShare) return;
+    const d = await game.cached('daily', 60000, () => game.daily());
+    const cm = d.community || {};
+    const open = (cm.status || 'NOT_SUBMITTED') === 'NOT_SUBMITTED' || (cm.status === 'REJECTED' && cm.resubmissionAllowed);
+    const key = `${d.dayKey}:${cm.status}`;
+    if (open && store.cursor('shareNudge', '') !== key) {
+      store.setCursor('shareNudge', key);
+      log.push(cm.xUsername
+        ? '🐦 <b>Share your run</b> hari ini belum dikirim: +5.000 $LM. Buka 📜 Quest → 🐦 Share di X (2 tap).'
+        : '🐦 <b>Share your run</b> = +5.000 $LM per hari. Hubungkan X dulu: 📜 Quest → 🐦 Share di X → 🔗 Hubungkan X.');
+    }
+    const seen = store.cursor('shareSeen', '');
+    if (cm.status === 'APPROVED' && seen !== `${d.dayKey}:APPROVED`) {
+      store.setCursor('shareSeen', `${d.dayKey}:APPROVED`);
+      log.push('🐦 Post X disetujui: <b>+5.000 $LM</b> 🎉');
+    } else if (cm.status === 'REJECTED' && seen !== `${d.dayKey}:REJECTED`) {
+      store.setCursor('shareSeen', `${d.dayKey}:REJECTED`);
+      log.push(`🐦 Post X ditolak${cm.reviewReason ? ': ' + cm.reviewReason : ''}.${cm.resubmissionAllowed ? ' Boleh kirim ulang.' : ' Coba lagi besok.'}`);
+    }
+  });
+
   await step('Pass', async () => {
     if (!s.autoPass || now - store.cursor('passAt') < 0.5 * H) return;
     store.setCursor('passAt', now);

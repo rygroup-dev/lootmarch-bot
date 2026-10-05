@@ -134,6 +134,10 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       case '/game/daily/mission/claim': srv.daily.missions.find((m) => m.id === body.missionId).claimed = true; return wrap();
       case '/game/daily/login/claim': srv.daily.login.claimedToday = true; return wrap();
       case '/game/daily/board/claim': srv.daily.board.claimed = true; return wrap();
+      case '/game/x-link/start': return json(200, { url: 'https://x.com/i/oauth2/authorize?state=abc' });
+      case '/game/daily/community/submit':
+        srv.daily.community = { ...srv.daily.community, status: 'PENDING_REVIEW', tweetUrl: body.tweetUrl, submittedAt: 1 };
+        return json(200, { daily: srv.daily });
       case '/game/pass': return json(200, srv.pass);
       case '/game/pass/claim': srv.pass.claimable = false; return wrap();
       case '/game/chest/buy': srv.state.balances.LM -= srv.state.prices.chests[body.chestId]; return wrap({ items: ['rusty_stiletto'] });

@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import {
   CAT, RARITY_ICON, SLOT_ICON, SLOT_NAME, CLASS_ICON, itemInfo, itemLabel, itemStats, fmtStat, regionName,
   xpToNext, sealCost, SHOP_CHESTS, PET_CHESTS, petInfo, petProgress, petBonus, PET_ABILITY, ZONES_PER_FLOOR,
-  heroPower, heroStats, PET_PREFIX, CLASS_INFO, NICK_MAX,
+  heroPower, heroStats, PET_PREFIX, CLASS_INFO, NICK_MAX, tweetIntent,
 } from './catalog.js';
 import { BUILDS, VAM_CAP, depth, resolveBuild } from './game.js';
 import { esc } from './autopilot.js';
@@ -201,9 +201,9 @@ export function questView(d) {
   lines.push('', `🏅 Daily reward: ${b.completed}/${b.required} ${b.claimed ? '✅ diklaim' : b.complete ? '🎁 siap' : ''} → ${n(b.reward?.Bone)} Bone + ${n(b.reward?.XP)} XP`);
   const l = d.login || {};
   lines.push(`📅 Login streak: hari ${l.nextDay ?? '?'} ${l.claimedToday ? '✅ sudah' : '🎁 siap'}`);
-  if (d.community) lines.push(`🐦 Share your run: ${esc(d.community.status)} (5.000 $LM/hari, submit di web)`);
+  if (d.community) lines.push(`🐦 Share your run: ${shareStatusText(d.community)}`);
   lines.push('', `Reset dalam ${dur(d.resetAt - d.serverNow)} (00:00 UTC)`);
-  const kb = new InlineKeyboard().text('🎁 Klaim semua', 'quest:claim');
+  const kb = new InlineKeyboard().text('🎁 Klaim semua', 'quest:claim').text('🐦 Share di X (+5.000)', 'share:menu');
   return { text: lines.join('\n'), kb: back(kb) };
 }
 
@@ -491,6 +491,7 @@ export function settingsView(s, { address, session }) {
   t('autoChest', 'Buka chest'); t('autoSell', 'Jual gear sisa'); kb.row();
   t('autoUpgrade', `Upgrade market (${Math.round(s.upgradeShare * 100)}% $LM)`); kb.row();
   t('alertLive', 'Alert live check'); t('alertDrops', 'Alert drop global'); kb.row();
+  t('alertShare', 'Pengingat share X'); kb.row();
   t('reports', 'Laporan autopilot'); kb.row();
   kb.text(`⏱ AFK: ${s.afkHours}j`, 'set:afk').text(`🏗 Build: ${BUILDS[s.build]?.name}`, 'hero:build').row();
   kb.text(`♻️ Salvage: ${CAT.rarities[s.salvageLevel]}`, 'set:salv').text(`🔨 Cadangan: ${n(s.forgeReserveLm)} LM`, 'set:fres').row();
@@ -555,6 +556,35 @@ export function newHeroLookView(d) {
   return { text: lines.join('\n'), kb };
 }
 export const NICK_RULE = `1–${NICK_MAX} karakter, huruf/angka/spasi/_`;
+
+// ---------------------------------------------------------------- share your run (X)
+export const SHARE_LM = 5000;
+export function shareStatusText(cm = {}) {
+  const st = cm.status || 'NOT_SUBMITTED';
+  if (st === 'APPROVED') return `✅ disetujui hari ini (+${n(SHARE_LM)} $LM)`;
+  if (st === 'PENDING_REVIEW') return '⏳ menunggu review tim LootMarch';
+  if (st === 'REJECTED') return `❌ ditolak${cm.reviewReason ? ' — ' + esc(cm.reviewReason) : ''}${cm.resubmissionAllowed ? ' (boleh kirim ulang)' : ' (coba lagi besok)'}`;
+  return `belum dikirim (+${n(SHARE_LM)} $LM per post disetujui)`;
+}
+export const canSubmitShare = (cm = {}) => (cm.status || 'NOT_SUBMITTED') === 'NOT_SUBMITTED' || (cm.status === 'REJECTED' && cm.resubmissionAllowed);
+
+export function shareView(cm = {}, texts = []) {
+  const lines = ['🐦 <b>Share your run</b> — 1 post disetujui per hari = <b>+5.000 $LM</b>', '', `Status: ${shareStatusText(cm)}`];
+  if (cm.tweetUrl) lines.push(`Post: ${esc(cm.tweetUrl)}`);
+  const kb = new InlineKeyboard();
+  if (!cm.xUsername) {
+    lines.push('', '1️⃣ Hubungkan akun X dulu (sekali saja). Game hanya membaca username, tidak pernah posting atas namamu.');
+    kb.text('🔗 Hubungkan X', 'share:link');
+  } else {
+    lines.push(`X terhubung: <b>@${esc(cm.xUsername)}</b>`);
+    if (canSubmitShare(cm)) {
+      lines.push('', '1️⃣ Tap salah satu teks → aplikasi X terbuka dengan teks terisi → <b>Post</b>.', '2️⃣ Salin link post-nya → tekan <b>📎 Kirim link post</b>.', '', '<i>Tips: tambahkan screenshot hero/loot supaya lebih mudah disetujui.</i>');
+      texts.forEach((t, i) => { lines.push('', `<b>Teks ${i + 1}</b>`, `<code>${esc(t)}</code>`); kb.url(`✍️ Post teks ${i + 1}`, tweetIntent(t)).row(); });
+      kb.text('📎 Kirim link post', 'share:submit');
+    } else if (cm.status === 'APPROVED') lines.push('', 'Sudah beres hari ini. Reset 00:00 UTC (07:00 WIB).');
+  }
+  return { text: lines.join('\n'), kb: back(kb, 'quest') };
+}
 
 export function confirmKb(token) {
   return new InlineKeyboard().text('✅ Ya, lanjut', 'cf:' + token).text('❌ Batal', 'nav:home');

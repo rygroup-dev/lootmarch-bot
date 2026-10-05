@@ -3,7 +3,7 @@ import { Bot, GrammyError, InlineKeyboard } from 'grammy';
 import { ethers } from 'ethers';
 import * as V from './views.js';
 import { esc, runRound, progressStats } from './autopilot.js';
-import { itemInfo, itemLabel, petInfo, CAT, CLASS_LOOK, randomLook, cleanNick } from './catalog.js';
+import { itemInfo, itemLabel, petInfo, CAT, CLASS_LOOK, randomLook, cleanNick, shareTemplates, parseTweetUrl } from './catalog.js';
 import { BUILDS } from './game.js';
 import { WalletService, isAddress, parseAmount, fmtEth, fmtUnits } from './wallet.js';
 import { CaptchaRequired } from './auth.js';
@@ -218,6 +218,21 @@ export function createBot({ cfg, store, game, autopilot }) {
     store.setSetting('build', ctx.match[1]);
     await show(ctx, V.buildPicker(store.settings.build, game.last?.character?.classId));
   }));
+
+  // ------------------------------------------------------------ share your run (X)
+  async function shareScreen(ctx) {
+    needLogin();
+    const [d, st] = await Promise.all([game.daily(), game.state(20000)]);
+    await show(ctx, V.shareView(d.community || {}, shareTemplates(st)));
+  }
+  bot.callbackQuery('share:menu', h(shareScreen));
+  bot.callbackQuery('share:link', h(async (ctx) => {
+    needLogin();
+    const r = await game.call((a) => a.xLinkStart());
+    if (!r?.url) throw new Error('Game tidak mengembalikan link X. Coba lagi nanti, atau hubungkan dari menu Quests di game.');
+    await show(ctx, { text: '🔗 Buka link ini, login X, lalu tekan <b>Authorize</b>. Setelah selesai kembali ke sini dan tekan 🔄.', kb: new InlineKeyboard().url('🔗 Izinkan di X', r.url).row().text('🔄 Cek status', 'share:menu') });
+  }));
+  bot.callbackQuery('share:submit', h(async (ctx) => ask(ctx, 'share', '📎 Tempel link post X kamu (contoh <code>https://x.com/username/status/123…</code>).')));
 
   // ------------------------------------------------------------ new hero
   bot.callbackQuery('new:start', h(async (ctx) => { needLogin(); await show(ctx, V.newHeroClassView()); }));
@@ -553,6 +568,17 @@ export function createBot({ cfg, store, game, autopilot }) {
           else throw e;
         }
         return home(ctx);
+      }
+      case 'share': {
+        const t = parseTweetUrl(text);
+        if (!t) throw new Error('Link tidak valid. Harus link post X: https://x.com/<username>/status/<angka>');
+        const d0 = await game.daily();
+        const linked = d0.community?.xUsername;
+        if (linked && linked.toLowerCase() !== t.user.toLowerCase()) throw new Error(`Post ini dari @${t.user}, tapi akun X yang terhubung @${linked}. Kirim post dari akun yang terhubung.`);
+        const r = await game.call((a) => a.submitShare(t.url));
+        store.addLog(`Share X dikirim: ${t.url}`, 'manual');
+        await say(ctx, `✅ Post dikirim untuk review.\nStatus: ${V.shareStatusText(r?.daily?.community || {})}`);
+        return shareScreen(ctx);
       }
       case 'nick': {
         const nick = cleanNick(text);

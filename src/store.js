@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS = {
   autoDaily: true,        // claim finished missions, daily board and login streak
   autoPass: true,         // claim reached March Pass tiers
   alertLive: true,        // warn when $LM is held by the human check
+  alertShare: true,       // daily reminder for the X "Share your run" quest
   alertDrops: false,      // announce every Legendary/Mythic drop in the game
   reports: true,          // short message after each autopilot round that did something
 };

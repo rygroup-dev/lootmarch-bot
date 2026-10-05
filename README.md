@@ -62,6 +62,7 @@ Bahan yang dibutuhkan: token bot dari [@BotFather](https://t.me/BotFather) dan I
 | 🎒 Inventory | Semua item dengan rarity & stat (termasuk level forge), pakai/lepas, forge +1/+5, jual, buang, salvage |
 | 🎁 Loot & AFK | Klaim loot chest, cek & klaim hadiah AFK |
 | 📜 Quest | Misi harian, daily reward, login streak, klaim semua |
+| 🐦 Share di X | Quest "Share your run" (+5.000 $LM/hari): hubungkan X sekali, pilih 1 dari 3 teks resmi game → X terbuka terisi → Post → kirim link ke bot. Bot cek username & melaporkan status review |
 | 🎫 Pass | Tier & XP March Pass, klaim, **analisa untung/rugi premium**, beli pakai $LM atau ETH |
 | 🗺 Travel | Pindah region/floor (cooldown 30 menit), buka seal floor |
 | 🐾 Pet | Koleksi pet, level & bonus, pakai/lepas, feed Bone, buka pet chest |

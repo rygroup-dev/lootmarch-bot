@@ -177,3 +177,42 @@ export const CLASS_INFO = {
   sword: { skill: 'Whirlwind', text: 'Putaran 215% kena semua musuh di sekitar. Seimbang, jarak dekat.' },
   dagger: { skill: 'Shadow Step', text: 'Lompat ke target 200%, single target. Lincah tapi paling rapuh.' },
 };
+
+// ---- "Share your run" post texts: same templates and daily shuffle as the game ----
+const SLOT_RANK = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+export function shareTemplates(st, day = new Date().toISOString().slice(0, 10)) {
+  const c = st.character || {}; const pr = st.progress || {};
+  const cls = CAT.weaponNames[c.classId] || c.className || 'hero';
+  const name = c.appearance?.nick || 'Hero';
+  const region = regionName(pr.zone_index ?? 0); const floor = pr.floor ?? 1;
+  const gear = Object.values(st.equipped || {}).filter(Boolean).map(itemInfo)
+    .sort((a, b) => SLOT_RANK.indexOf(b.rarity) - SLOT_RANK.indexOf(a.rarity) || (b.plus || 0) - (a.plus || 0));
+  const best = gear[0]; const bestName = best && best.name + (best.plus ? ' +' + best.plus : '');
+  const pet = st.pets?.activePet ? petInfo(st.pets.activePet) : null;
+  const powerTxt = heroPower(st).toLocaleString('en-US');
+  const all = [
+    `Floor ${floor}, ${region}. My ${cls} keeps marching. ⚔️\n@PlayLootMarch`,
+    `Lv ${c.level} ${cls} checking in from ${region}. 🗡️\nThe dungeon is not done with me yet.\n@PlayLootMarch`,
+    `${name} reached ${region} on Floor ${floor}. 🏰\nWho is deeper than me?\n@PlayLootMarch`,
+    `Power ${powerTxt} and climbing. 💪\nMy ${cls} build in LootMarch is coming together.\n@PlayLootMarch`,
+    `Idle hero, busy dungeon. My ${cls} cleared rooms while I was away. 😴⚔️\n@PlayLootMarch`,
+    `Today's march: ${region}. Tomorrow: deeper. 🔥\n@PlayLootMarch`,
+    bestName && `Wearing ${bestName} (${best.rarity}) into ${region}. ✨\n@PlayLootMarch`,
+    bestName && `Pulled a ${best.rarity} ${best.name} in LootMarch. 💎\nThe grind pays off in loot.\n@PlayLootMarch`,
+    pet && `My ${pet.rarity} ${pet.name.replace(/^\w+ /, '')} follows me everywhere in the dungeon. 🐾\n@PlayLootMarch`,
+    pet && `${pet.name.replace(/^\w+ /, '')} and I just took on ${region} together. 🐾⚔️\n@PlayLootMarch`,
+    `Sword, Spear, Wand, Axe or Dagger? I went ${cls}. What is your pick? ⚔️\n@PlayLootMarch`,
+    `New day, new loot. Lv ${c.level} and still marching. 🎒\n@PlayLootMarch`,
+  ].filter(Boolean);
+  let h = 0;
+  for (const ch of name + '|' + day) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => (h = (h * 1103515245 + 12345) >>> 0) / 4294967296;
+  for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+  return all.slice(0, 3);
+}
+export const tweetIntent = (text) => 'https://x.com/intent/tweet?text=' + encodeURIComponent(text);
+// https://x.com/<user>/status/<id> (also twitter.com, mobile.*, query strings)
+export function parseTweetUrl(u) {
+  const m = String(u || '').trim().match(/^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d+)/i);
+  return m ? { user: m[1], id: m[2], url: `https://x.com/${m[1]}/status/${m[2]}` } : null;
+}

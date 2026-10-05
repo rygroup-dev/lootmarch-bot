@@ -164,6 +164,8 @@ export class LootMarchApi {
   claimMission(dayKey, missionId) { return this.post('/game/daily/mission/claim', { dayKey, missionId }); }
   claimBoard(dayKey) { return this.post('/game/daily/board/claim', { dayKey }); }
   claimLogin() { return this.post('/game/daily/login/claim', {}); }
+  xLinkStart() { return this.post('/game/x-link/start', {}); }           // -> { url } (X OAuth, reads the username only)
+  submitShare(tweetUrl) { return this.post('/game/daily/community/submit', { tweetUrl }); } // -> { daily }
   claimPass() { return this.post('/game/pass/claim', {}); }
   buyPass(maxPrice) { return this.post('/game/pass/buy', { actionId: uuid(), maxPrice }); }
 
