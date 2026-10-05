@@ -102,9 +102,11 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       }
       case '/game/equipment/best': return wrap();
       case '/game/inventory/salvage': {
+        const lvl = ['common', 'uncommon', 'rare'].indexOf(body.level);
+        if (lvl < 0) return json(400, { error: 'BadSalvage', message: 'Invalid salvage action.' });
         let bone = 0;
         for (const [id, q] of Object.entries(srv.state.items)) {
-          if (id.includes('@') || id.startsWith('chest_') || !q || (RARITY_RANK[itemInfo(id).rarity] ?? 9) > body.level) continue;
+          if (id.includes('@') || id.startsWith('chest_') || !q || (RARITY_RANK[itemInfo(id).rarity] ?? 9) > lvl) continue;
           const left = body.keep === 0 ? 0 : 1;
           if (q > left) { bone += (q - left) * 30; srv.state.items[id] = left; }
         }

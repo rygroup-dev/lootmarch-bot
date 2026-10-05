@@ -135,11 +135,16 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     const spare = Object.entries(st.items || {}).filter(([id, q]) => q > 0 && itemInfo(id).kind === 'gear' && (RARITY_RANK[itemInfo(id).rarity] ?? 9) <= s.salvageLevel);
     if (!spare.length) return;
     const bone0 = st.balances?.Bone || 0;
-    if (spare.some(([id]) => !itemInfo(id).plus)) await game.salvage(s.salvageLevel, 0);
+    let quickErr = null;
+    if (spare.some(([id]) => !itemInfo(id).plus)) {
+      // the game's Quick Salvage sends the rarity name ("common" / "uncommon" / "rare")
+      try { await game.salvage(SALVAGE_LEVELS[s.salvageLevel] || 'common', 0); } catch (e) { quickErr = e; }
+    }
     for (const [id, q] of spare) if (itemInfo(id).plus) for (let i = 0; i < Math.min(q, 5); i++) await game.salvageOne(id);
     st = game.last || st;
     const got = (st.balances?.Bone || 0) - bone0;
     if (got > 0) log.push(`♻️ Salvage ${spare.length} gear sisa: +${fmt(got)} Bone`);
+    if (quickErr) throw quickErr;
   });
 
   await step('Sell', async () => {
@@ -221,14 +226,14 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   });
 
   await step('Quest', async () => {
-    if (!s.autoDaily || now - store.cursor('dailyAt') < 0.5 * H) return;
+    if (!s.autoDaily || now - store.cursor('dailyAt') < 0.25 * H) return;
     store.setCursor('dailyAt', now);
     const got = await game.claimDailyAll();
     if (got.length) log.push('📜 Quest diklaim: ' + got.join(', '));
   });
 
   await step('Pass', async () => {
-    if (!s.autoPass || now - store.cursor('passAt') < H) return;
+    if (!s.autoPass || now - store.cursor('passAt') < 0.5 * H) return;
     store.setCursor('passAt', now);
     const { pass: p, claimed } = await game.claimPassIfAny();
     if (claimed) log.push('🎫 Hadiah March Pass diklaim.');
@@ -275,6 +280,7 @@ export function progressStats(list, now = Date.now()) {
 
 // Just under the cheapest listing of the same item (same + level), else of the
 // same base item; never below what salvaging it would give.
+export const SALVAGE_LEVELS = ['common', 'uncommon', 'rare'];
 const SALVAGE_BONE = { common: 30, uncommon: 80, rare: 200, epic: 500, legendary: 1200, mythic: 3000 };
 export function sellPrice(id, listings, boneLm = 4.4) {
   const info = itemInfo(id);

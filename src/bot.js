@@ -289,7 +289,7 @@ export function createBot({ cfg, store, game, autopilot }) {
     const lvl = +ctx.match[1];
     await confirm(ctx, `Salvage semua gear cadangan sampai rarity <b>${CAT.rarities[lvl]}</b>? (1 copy tiap item disisakan)`, async (c) => {
       const b0 = game.last?.balances?.Bone || 0;
-      await game.salvage(lvl);
+      await game.salvage(['common', 'uncommon', 'rare'][lvl], 0);
       await say(c, `♻️ Salvage selesai: +${V.n((game.last?.balances?.Bone || 0) - b0)} Bone`);
       await show(c, V.invView(game.inventory(game.last), 0));
     });

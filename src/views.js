@@ -165,7 +165,7 @@ export function itemView(st, id) {
 }
 
 export function salvageView(st) {
-  const lines = ['♻️ <b>Salvage</b>', '', 'Gear cadangan dipecah jadi Bone (bahan forge). <b>Satu copy tiap item selalu disisakan</b>, item yang sudah di-forge (+) tidak ikut.', '', 'Bone per item (docs): Common 30 · Uncommon 80 · Rare 200 · Epic 500 · Legendary 1.200'];
+  const lines = ['♻️ <b>Salvage</b>', '', 'Gear di tas yang belum di-forge dipecah jadi Bone (bahan forge & seal). Gear yang dipakai, item forge (+), dan Mythic tidak ikut.', '', 'Bone per item (docs): Common 30 · Uncommon 80 · Rare 200 · Epic 500 · Legendary 1.200'];
   const kb = new InlineKeyboard()
     .text('⚪ s/d Common', 'salv:0').text('🟢 s/d Uncommon', 'salv:1').row()
     .text('🔵 s/d Rare', 'salv:2');
