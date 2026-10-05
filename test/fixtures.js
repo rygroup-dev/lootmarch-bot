@@ -134,7 +134,11 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       case '/game/daily/mission/claim': srv.daily.missions.find((m) => m.id === body.missionId).claimed = true; return wrap();
       case '/game/daily/login/claim': srv.daily.login.claimedToday = true; return wrap();
       case '/game/daily/board/claim': srv.daily.board.claimed = true; return wrap();
-      case '/game/x-link/start': return json(200, { url: 'https://x.com/i/oauth2/authorize?state=abc' });
+      case '/game/x-link/start': return json(200, { url: 'https://x.com/i/oauth2/authorize?state=abc' }, { 'set-cookie': 'lm_wlr_oauth=pkce1; Path=/api/prelaunch; HttpOnly' });
+      case '/prelaunch/x/callback':
+        if (!cookie.includes('lm_wlr_oauth=pkce1') || u.searchParams.get('state') !== 'abc') return json(400, { error: 'bad_state' });
+        srv.daily.community = { ...srv.daily.community, xUsername: 'RyHood' };
+        return new Response(null, { status: 302, headers: { location: '/play?x=linked' } });
       case '/game/daily/community/submit':
         srv.daily.community = { ...srv.daily.community, status: 'PENDING_REVIEW', tweetUrl: body.tweetUrl, submittedAt: 1 };
         return json(200, { daily: srv.daily });

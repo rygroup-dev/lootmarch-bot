@@ -147,6 +147,12 @@ test('share your run: link X, wrong account refused, right post submitted', asyn
   await h.press('share:link');
   const linkMsg = [...h.sent].reverse().find((x) => x.payload.reply_markup?.inline_keyboard?.[0]?.[0]?.url);
   assert.match(linkMsg.payload.reply_markup.inline_keyboard[0][0].url, /oauth2/);
+  await h.text('https://evil.example/api/prelaunch/x/callback?code=1&state=abc');
+  assert.match(h.lastText(), /bukan URL callback/);
+  await h.press('share:link');
+  await h.text('https://lootmarch.xyz/api/prelaunch/x/callback?code=1&state=abc');
+  assert.match(h.lastText(), /X terhubung|X terhubung: @RyHood/);
+  assert.equal(h.srv.daily.community.xUsername, 'RyHood');
   h.srv.daily.community = { status: 'NOT_SUBMITTED', xUsername: 'RyHood' };
   h.game.forget('daily');
   await h.press('share:menu');

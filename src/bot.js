@@ -230,7 +230,15 @@ export function createBot({ cfg, store, game, autopilot }) {
     needLogin();
     const r = await game.call((a) => a.xLinkStart());
     if (!r?.url) throw new Error('Game tidak mengembalikan link X. Coba lagi nanti, atau hubungkan dari menu Quests di game.');
-    await show(ctx, { text: '🔗 Buka link ini, login X, lalu tekan <b>Authorize</b>. Setelah selesai kembali ke sini dan tekan 🔄.', kb: new InlineKeyboard().url('🔗 Izinkan di X', r.url).row().text('🔄 Cek status', 'share:menu') });
+    pending.set(ctx.chat.id, { kind: 'xcallback', data: {}, at: Date.now() });
+    await show(ctx, {
+      text: ['🔗 <b>Hubungkan X</b> (link berlaku 10 menit)', '',
+        '1️⃣ Tap <b>Izinkan di X</b> → login X → <b>Authorize</b>.',
+        '2️⃣ Browser lalu membuka halaman <code>lootmarch.xyz/api/prelaunch/x/callback…</code> (boleh error/kosong, itu normal).',
+        '3️⃣ <b>Salin seluruh URL</b> dari address bar halaman itu dan kirim ke chat ini. Bot yang menyelesaikannya.', '',
+        '<i>Cara lain: di layar game (VNC) buka Quests → COMMUNITY → CONNECT X.</i>'].join('\n'),
+      kb: new InlineKeyboard().url('🔗 Izinkan di X', r.url).row().text('🔄 Cek status', 'share:menu'),
+    });
   }));
   bot.callbackQuery('share:submit', h(async (ctx) => ask(ctx, 'share', '📎 Tempel link post X kamu (contoh <code>https://x.com/username/status/123…</code>).')));
 
@@ -549,7 +557,7 @@ export function createBot({ cfg, store, game, autopilot }) {
     const p = pending.get(ctx.chat.id);
     const text = ctx.message.text.trim();
     if (!p || text.startsWith('/')) return;
-    if (Date.now() - p.at > TTL) { pending.delete(ctx.chat.id); throw new Error('Input kedaluwarsa, ulangi dari menu.'); }
+    if (Date.now() - p.at > (p.kind === 'xcallback' ? 2 * TTL : TTL)) { pending.delete(ctx.chat.id); throw new Error('Input kedaluwarsa, ulangi dari menu.'); }
     const secret = p.kind === 'key' || p.kind === 'cookie';
     if (secret) await ctx.deleteMessage().catch(() => {});
     pending.delete(ctx.chat.id);
@@ -568,6 +576,18 @@ export function createBot({ cfg, store, game, autopilot }) {
           else throw e;
         }
         return home(ctx);
+      }
+      case 'xcallback': {
+        if (!/^https:\/\/lootmarch\.xyz\/api\/prelaunch\/x\/callback\?/.test(text)) {
+          throw new Error('Itu bukan URL callback. Kirim URL yang diawali https://lootmarch.xyz/api/prelaunch/x/callback? (ulangi dari 🔗 Hubungkan X kalau sudah lewat 10 menit).');
+        }
+        await game.call((a) => a.completeXLink(text));
+        game.forget('daily');
+        const d = await game.daily();
+        if (!d.community?.xUsername) throw new Error('X belum terhubung (link mungkin kedaluwarsa atau sudah dipakai). Ulangi dari 🔗 Hubungkan X.');
+        store.addLog(`X terhubung: @${d.community.xUsername}`, 'manual');
+        await say(ctx, `✅ X terhubung: <b>@${esc(d.community.xUsername)}</b>`);
+        return shareScreen(ctx);
       }
       case 'share': {
         const t = parseTweetUrl(text);

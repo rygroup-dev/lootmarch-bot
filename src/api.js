@@ -164,6 +164,16 @@ export class LootMarchApi {
   claimMission(dayKey, missionId) { return this.post('/game/daily/mission/claim', { dayKey, missionId }); }
   claimBoard(dayKey) { return this.post('/game/daily/board/claim', { dayKey }); }
   claimLogin() { return this.post('/game/daily/login/claim', {}); }
+  // Finish the X OAuth: the callback needs the lm_wlr_oauth cookie that xLinkStart
+  // set in *this* jar, so the user's browser can't complete it on its own.
+  async completeXLink(callbackUrl) {
+    const u = new URL(callbackUrl);
+    if (u.origin !== this.baseUrl || !u.pathname.startsWith('/api/prelaunch/x/callback')) throw new ApiError(0, 'bad_url', 'Bukan link callback X dari lootmarch.xyz.');
+    const res = await this.fetch(u.href, { method: 'GET', redirect: 'manual', headers: { 'user-agent': UA, cookie: this.cookie, referer: 'https://x.com/' }, signal: AbortSignal.timeout(this.timeoutMs) });
+    const sc = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+    if (sc.length) { applySetCookie(this.jar, sc); if (this.onCookie) this.onCookie(this.cookie); }
+    return { status: res.status, location: res.headers.get('location') || '' };
+  }
   xLinkStart() { return this.post('/game/x-link/start', {}); }           // -> { url } (X OAuth, reads the username only)
   submitShare(tweetUrl) { return this.post('/game/daily/community/submit', { tweetUrl }); } // -> { daily }
   claimPass() { return this.post('/game/pass/claim', {}); }
