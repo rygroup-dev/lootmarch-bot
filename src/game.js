@@ -52,6 +52,10 @@ export function attrDelta(from, to) {
 }
 
 export const MARKET_BUY_FEE = 0.05;
+// Skip poor buys: an upgrade must add 2% Power and at least 0.15 Power per $LM.
+// (First gear on empty slots gives ~0.6/LM; a +5 Power helm for 104 $LM is 0.05.)
+export const MIN_GAIN_SHARE = 0.02;
+export const MIN_POWER_PER_LM = 0.15;
 
 // Best Power gain per $LM for each empty/weak slot, within budget. Greedy by
 // value: the cheapest big jumps (often an empty slot) are bought first.
@@ -64,6 +68,7 @@ export function suggestUpgrades(st, listings, budget) {
     const cost = Math.ceil(l.price * (1 + MARKET_BUY_FEE));
     const gain = heroPower(st, { ...(st.equipped || {}), [info.slot]: l.itemId }) - base;
     if (gain <= 0 || cost > budget) continue;
+    if (gain < base * MIN_GAIN_SHARE || gain / cost < MIN_POWER_PER_LM) continue;
     const pick = { slot: info.slot, listing: l, cost, gain, ratio: gain / cost };
     const cur = perSlot.get(info.slot);
     if (!cur || pick.ratio > cur.ratio || (pick.ratio === cur.ratio && pick.gain > cur.gain)) perSlot.set(info.slot, pick);

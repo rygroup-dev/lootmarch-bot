@@ -364,3 +364,11 @@ test('autopilot waits for a hero on a fresh account', async () => {
   assert.ok(r.log[0].includes('belum punya hero'));
   assert.ok(!srv.calls.some((c) => c.path === '/offline/claim'));
 });
+
+test('upgrade planner skips poor-value buys', async () => {
+  const { suggestUpgrades } = await import('../src/game.js');
+  const st = makeState();
+  // a common helmet already worn; a slightly better one for a lot of $LM is not worth it
+  const plan = suggestUpgrades(st, [{ id: 'X', itemId: 'leather_hood', price: 5000 }], 20000);
+  assert.equal(plan.picks.length, 0);
+});
