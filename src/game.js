@@ -52,31 +52,46 @@ export function attrDelta(from, to) {
 }
 
 export const MARKET_BUY_FEE = 0.05;
-// Skip poor buys: an upgrade must add 2% Power and at least 0.15 Power per $LM.
-// (First gear on empty slots gives ~0.6/LM; a +5 Power helm for 104 $LM is 0.05.)
+// Skip poor buys: an upgrade must add 2% Power, and every step up must be
+// worth at least 1 Power per 100 $LM (good market buys run 0.03-0.1 per $LM).
 export const MIN_GAIN_SHARE = 0.02;
-export const MIN_POWER_PER_LM = 0.15;
+export const MIN_POWER_PER_LM = 0.01;
 
-// Best Power gain per $LM for each empty/weak slot, within budget. Greedy by
-// value: the cheapest big jumps (often an empty slot) are bought first.
+// Pick at most one listing per slot to maximise Power within the budget.
+// Start with each slot's best value buy, then keep stepping a slot up to a
+// stronger listing while the extra Power per extra $LM stays worthwhile.
 export function suggestUpgrades(st, listings, budget) {
   const base = heroPower(st);
-  const perSlot = new Map();
+  const cands = new Map(); // slot -> [{listing, cost, gain}]
   for (const l of listings || []) {
     if (isPetId(l.itemId) || !canWear(st, l.itemId)) continue;
     const info = itemInfo(l.itemId);
     const cost = Math.ceil(l.price * (1 + MARKET_BUY_FEE));
     const gain = heroPower(st, { ...(st.equipped || {}), [info.slot]: l.itemId }) - base;
-    if (gain <= 0 || cost > budget) continue;
-    if (gain < base * MIN_GAIN_SHARE || gain / cost < MIN_POWER_PER_LM) continue;
-    const pick = { slot: info.slot, listing: l, cost, gain, ratio: gain / cost };
-    const cur = perSlot.get(info.slot);
-    if (!cur || pick.ratio > cur.ratio || (pick.ratio === cur.ratio && pick.gain > cur.gain)) perSlot.set(info.slot, pick);
+    if (gain < Math.max(1, base * MIN_GAIN_SHARE) || gain / cost < MIN_POWER_PER_LM || cost > budget) continue;
+    (cands.get(info.slot) || cands.set(info.slot, []).get(info.slot)).push({ slot: info.slot, listing: l, cost, gain });
   }
-  const picks = [...perSlot.values()].sort((a, b) => b.ratio - a.ratio);
-  const out = []; let left = budget;
-  for (const p of picks) if (p.cost <= left) { out.push(p); left -= p.cost; }
-  return { picks: out, spend: budget - left, gain: out.reduce((t, p) => t + p.gain, 0), base };
+  // first pass: best value per slot, best slots first
+  const firsts = [...cands.values()].map((a) => a.reduce((x, y) => (y.gain / y.cost > x.gain / x.cost ? y : x)))
+    .sort((a, b) => b.gain / b.cost - a.gain / a.cost);
+  const chosen = new Map(); let left = budget;
+  for (const p of firsts) if (p.cost <= left) { chosen.set(p.slot, p); left -= p.cost; }
+  // then upgrades: the best marginal step across all slots, repeatedly
+  for (;;) {
+    let best = null;
+    for (const [slot, cur] of chosen) {
+      for (const c of cands.get(slot)) {
+        const dc = c.cost - cur.cost; const dg = c.gain - cur.gain;
+        if (dg <= 0 || dc > left) continue;
+        const r = dc <= 0 ? Infinity : dg / dc;
+        if (r >= MIN_POWER_PER_LM && (!best || r > best.r)) best = { slot, c, dc, r };
+      }
+    }
+    if (!best) break;
+    chosen.set(best.slot, best.c); left -= best.dc;
+  }
+  const picks = [...chosen.values()].map((p) => ({ ...p, ratio: p.gain / p.cost })).sort((a, b) => b.gain - a.gain);
+  return { picks, spend: budget - left, gain: picks.reduce((t, p) => t + p.gain, 0), base };
 }
 
 export function depth(floor, zoneIndex) { return (floor - 1) * ZONES_PER_FLOOR + zoneIndex + 1; }
