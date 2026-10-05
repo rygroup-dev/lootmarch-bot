@@ -242,7 +242,9 @@ export class Game {
   equip(itemId) { return this.act((a) => a.equip(itemId)); }
   unequip(slot) { return this.act((a) => a.unequip(slot)); }
   forge(itemId, steps = 1) { return this.act((a) => a.forge(itemId, steps)); }
-  salvage(level) { return this.act((a) => a.salvage(level)); }
+  salvage(level, keep) { return this.act((a) => a.salvage(level, keep)); }
+  // salvage one specific item (also works for forged copies); pays Bone like the web client
+  salvageOne(itemId) { return this.act((a) => a.destroy(itemId, 1)); }
 
   // --- travel -------------------------------------------------------------
   travelReadyIn(st = this.last) {

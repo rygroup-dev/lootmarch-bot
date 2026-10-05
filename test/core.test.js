@@ -192,6 +192,9 @@ test('autopilot round: AFK, loot, equip, salvage, attrs, quests', async () => {
     assert.ok(paths.includes(p), 'missing ' + p);
   }
   assert.ok(!paths.includes('/game/forge'), 'forge is opt-in');
+  assert.equal(srv.calls.find((c) => c.path === '/game/inventory/salvage').body.keep, 0, 'quick salvage: no copy kept');
+  assert.ok(paths.includes('/game/inventory/destroy'), 'forged spare salvaged one by one');
+  assert.ok(srv.state.items.steel_stiletto >= 1, 'rare spare is not salvaged');
   assert.ok(log.some((l) => l.includes('AFK')));
   // second round right after: nothing to do again
   srv.calls.length = 0;
@@ -398,4 +401,25 @@ test('captcha alert comes early while the browser is playing', async () => {
   game.forget('pass');
   const b = await runRound(game, store);
   assert.ok(!b.log.some((l) => l.includes('Captcha')), 'once per expiry');
+});
+
+test('rare spare gear is listed just under the cheapest same item', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  store.setSetting('autoUpgrade', false);
+  await runRound(game, store);
+  const list = srv.calls.find((c) => c.path === '/game/market/list');
+  assert.equal(list.body.itemId, 'steel_stiletto');
+  assert.equal(list.body.price, 2999);
+});
+
+test('floor gate: seal is broken and the hero travels onto the new floor', async () => {
+  const st = makeState({ progress: { zone_index: 10, floor: 1, best_depth: 10, floor_unlocked: 1, floor_gate: 2, floor_travel_at: 0 } });
+  const { srv, store, game } = setup({ state: st });
+  await game.login();
+  const { log } = await runRound(game, store);
+  assert.ok(srv.calls.some((c) => c.path === '/game/floor/unlock' && c.body.floor === 2));
+  const tr = srv.calls.find((c) => c.path === '/game/run/travel');
+  assert.deepEqual([tr.body.floor, tr.body.zoneIndex], [2, 0]);
+  assert.ok(log.some((l) => l.includes('Travel ke')));
 });

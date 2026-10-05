@@ -482,7 +482,8 @@ export function settingsView(s, { address, session }) {
   t('autoEquip', 'Equip best'); t('autoAttr', 'Auto attribute'); kb.row();
   t('autoSalvage', `Salvage s/d ${CAT.rarities[s.salvageLevel]}`); t('autoForge', 'Auto forge'); kb.row();
   t('autoDaily', 'Quest'); t('autoPass', 'Pass'); kb.row();
-  t('autoSeal', 'Auto seal floor'); t('autoChest', 'Buka chest'); kb.row();
+  t('autoSeal', 'Auto seal floor'); t('autoTravel', 'Travel floor baru'); kb.row();
+  t('autoChest', 'Buka chest'); t('autoSell', 'Jual gear sisa'); kb.row();
   t('autoUpgrade', `Upgrade market (${Math.round(s.upgradeShare * 100)}% $LM)`); kb.row();
   t('alertLive', 'Alert live check'); t('alertDrops', 'Alert drop global'); kb.row();
   t('reports', 'Laporan autopilot'); kb.row();

@@ -30,10 +30,12 @@ export const DEFAULT_SETTINGS = {
   autoAttr: true,         // spend attribute points on level up
   build: 'auto',          // attribute build, see BUILDS in game.js ('auto' = by class)
   autoSalvage: true,      // break spare gear into Bone (one copy of each item is always kept)
-  salvageLevel: 0,        // highest rarity salvaged: 0 common, 1 uncommon, 2 rare
+  salvageLevel: 1,        // highest rarity salvaged: 0 common, 1 uncommon, 2 rare (rarer spares are sold)
+  autoSell: true,         // list spare gear above salvageLevel on the market
   autoChest: true,        // open chests / pet chests already owned (pass & quest rewards); free
   autoUpgrade: true,      // buy better gear from the market when it raises Power
   upgradeShare: 0.5,      // ...spending at most this share of the game $LM balance per round
+  autoTravel: true,       // walk the hero onto a newly opened floor
   autoSeal: true,         // break the next floor seal once the floor is cleared and it is affordable
   autoForge: false,       // spends $LM + Bone, so it is opt-in
   forgeReserveLm: 5000,   // never forge below this much $LM

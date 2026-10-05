@@ -1,11 +1,13 @@
 // Shapes copied from real responses, values made up.
+import { itemInfo, RARITY_RANK } from '../src/catalog.js';
 export const ADDR = '0x1111111111111111111111111111111111111111';
 
 export function makeState(over = {}) {
   return {
     prices: { lmUsd: 0.00004, chests: { chest_common: 2500, chest_rare: 25000, chest_epic: 75000, chest_legendary: 175000, chest_mythic_weapon: 2000000, chest_mythic_equipment: 2000000 }, bonePack: { bone: 100, lm: 500 } },
     balances: { Bone: 1000, Gem: 0, XP: 1277, LM: 20000 },
-    items: { stiletto_rusty: 0, rusty_stiletto: 3, 'bronze_stiletto@2': 1, iron_greathelm: 2, chest_common: 1 },
+    // like the real game: `items` is the backpack only; worn gear lives in `equipped`
+    items: { stiletto_rusty: 0, rusty_stiletto: 3, 'rusty_stiletto@4': 1, iron_greathelm: 2, steel_stiletto: 1, chest_common: 1 },
     pendingLoot: { bone: 6, items: [], drops: 4 },
     equipped: { weapon: 'bronze_stiletto@2', helmet: 'iron_greathelm' },
     progress: { user_id: ADDR, zone_index: 2, floor: 1, fortune_until: 0, best_depth: 3, floor_travel_at: 0, floor_unlocked: 1, floor_gate: 0 },
@@ -55,6 +57,7 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
     { id: 'L2', itemId: 'hide_brigandine', price: 74, at: 1, petXp: null, seller: 'Y' },        // armor slot is empty
     { id: 'L3', itemId: 'nightshade_stiletto', price: 9e9, at: 1, petXp: null, seller: 'Z' },   // too expensive
     { id: 'L4', itemId: 'pet:craboulder:rare', price: 80000, at: 1, petXp: 6000, seller: 'P' },
+    { id: 'L5', itemId: 'steel_stiletto', price: 3000, at: 1, petXp: null, seller: 'Q' },
   ], state, calls, live: { mode: 'monitor', needed: true, valid: true, expiresAt: 9e9, held: 0, ttl: 3600 }, daily: structuredClone(DAILY), pass: makePass(), loggedIn: false, wallet: null };
   const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
   srv.fetch = async (url, init = {}) => {
@@ -92,9 +95,23 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
         srv.state.balances.LM -= Math.ceil(l.price * 1.05); srv.state.items[l.itemId] = (srv.state.items[l.itemId] || 0) + 1;
         srv.listings = srv.listings.filter((x) => x !== l); return wrap();
       }
-      case '/game/equipment/equip': { const slot = body.itemId.includes('greathelm') ? 'helmet' : body.itemId.includes('stiletto') ? 'weapon' : 'armor'; srv.state.equipped[slot] = body.itemId; return wrap(); }
+      case '/game/equipment/equip': { // worn gear leaves the backpack, the old piece goes back in
+        const slot = itemInfo(body.itemId).slot; const old = srv.state.equipped[slot];
+        srv.state.items[body.itemId]--; if (old) srv.state.items[old] = (srv.state.items[old] || 0) + 1;
+        srv.state.equipped[slot] = body.itemId; return wrap();
+      }
       case '/game/equipment/best': return wrap();
-      case '/game/inventory/salvage': srv.state.items.rusty_stiletto = 1; srv.state.balances.Bone += 60; return wrap();
+      case '/game/inventory/salvage': {
+        let bone = 0;
+        for (const [id, q] of Object.entries(srv.state.items)) {
+          if (id.includes('@') || id.startsWith('chest_') || !q || (RARITY_RANK[itemInfo(id).rarity] ?? 9) > body.level) continue;
+          const left = body.keep === 0 ? 0 : 1;
+          if (q > left) { bone += (q - left) * 30; srv.state.items[id] = left; }
+        }
+        srv.state.balances.Bone += bone; return wrap({ salvaged: { bone } });
+      }
+      case '/game/inventory/destroy': srv.state.items[body.itemId] -= body.qty; srv.state.balances.Bone += 30 * body.qty; return wrap({ bone: 30 * body.qty });
+      case '/game/market/list': srv.state.items[body.itemId]--; srv.state.market.push({ id: 'M' + srv.state.market.length, itemId: body.itemId, price: body.price }); return wrap();
       case '/game/character/attributes': {
         const c = srv.state.character; const add = Object.values(body.attributes).reduce((a, b) => a + b, 0);
         if (add > c.sp) return json(400, { error: 'NoPoints', message: 'Not enough attribute points.' });
@@ -109,6 +126,7 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
         for (const [k, v] of Object.entries(srv.state.equipped)) if (v === id) srv.state.equipped[k] = nid;
         return wrap();
       }
+      case '/game/run/travel': Object.assign(srv.state.progress, { floor: body.floor, zone_index: body.zoneIndex, floor_travel_at: Math.floor(Date.now() / 1000) }); return wrap({ runId: 'r2' });
       case '/game/floor/unlock': srv.state.balances.LM -= 3000; srv.state.balances.Bone -= 800; srv.state.progress.floor_unlocked = body.floor; return wrap();
       case '/game/daily': return json(200, srv.daily);
       case '/game/daily/mission/claim': srv.daily.missions.find((m) => m.id === body.missionId).claimed = true; return wrap();

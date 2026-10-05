@@ -144,7 +144,8 @@ export class LootMarchApi {
   unequip(slot) { return this.post('/game/equipment/unequip', { slot, actionId: uuid() }); }
   forge(itemId, steps = 1) { return this.post('/game/forge', { itemId, actionId: uuid(), steps }); }
   // level = highest rarity index to break (0 common, 1 uncommon, 2 rare). One copy of each item stays.
-  salvage(level) { return this.post('/game/inventory/salvage', { level, actionId: uuid() }); }
+  // keep=0 is the game's "Quick salvage": every unforged backpack copy goes (worn gear is never in the backpack)
+  salvage(level, keep) { return this.post('/game/inventory/salvage', { level, actionId: uuid(), ...(keep === 0 ? { keep: 0 } : {}) }); }
   destroy(itemId, qty = 1) { return this.post('/game/inventory/destroy', { itemId, qty, actionId: uuid() }); }
 
   // --- shop & chests ---

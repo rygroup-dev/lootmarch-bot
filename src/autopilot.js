@@ -127,17 +127,37 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     if (done.length) log.push(`🛍 Upgrade market: ${done.map((p) => itemLabel(p.listing.itemId, { short: true })).join(', ')} (−${fmt(done.reduce((t, p) => t + p.cost, 0))} $LM, ⚡ ${fmt(plan.base)} → ${fmt(heroPower(st))})`);
   });
 
+  // Spare gear (the backpack only holds what is not worn, after Equip best):
+  // common/uncommon -> Bone (30/80 Bone beat their ~80/~440 $LM market price and
+  // Bone pays for seals & forging); rare and better -> listed on the market.
   await step('Salvage', async () => {
     if (!s.autoSalvage) return;
-    const spare = Object.entries(st.items || {}).filter(([id, q]) => {
-      const i = itemInfo(id);
-      return i.kind === 'gear' && !i.plus && (RARITY_RANK[i.rarity] ?? 9) <= s.salvageLevel && q > 1;
-    });
+    const spare = Object.entries(st.items || {}).filter(([id, q]) => q > 0 && itemInfo(id).kind === 'gear' && (RARITY_RANK[itemInfo(id).rarity] ?? 9) <= s.salvageLevel);
     if (!spare.length) return;
     const bone0 = st.balances?.Bone || 0;
-    await game.salvage(s.salvageLevel);
+    if (spare.some(([id]) => !itemInfo(id).plus)) await game.salvage(s.salvageLevel, 0);
+    for (const [id, q] of spare) if (itemInfo(id).plus) for (let i = 0; i < Math.min(q, 5); i++) await game.salvageOne(id);
     st = game.last || st;
-    log.push(`♻️ Salvage gear cadangan: +${fmt((st.balances?.Bone || 0) - bone0)} Bone`);
+    const got = (st.balances?.Bone || 0) - bone0;
+    if (got > 0) log.push(`♻️ Salvage ${spare.length} gear sisa: +${fmt(got)} Bone`);
+  });
+
+  await step('Sell', async () => {
+    if (!s.autoSell) return;
+    const slots = 5 - (st.market || []).length;
+    if (slots <= 0) return;
+    const spare = Object.entries(st.items || {}).filter(([id, q]) => q > 0 && itemInfo(id).kind === 'gear' && (RARITY_RANK[itemInfo(id).rarity] ?? 0) > s.salvageLevel);
+    if (!spare.length) return;
+    const { listings } = await game.cached('market:all', 30000, () => game.market({}));
+    const sold = [];
+    for (const [id] of spare.slice(0, slots)) {
+      const price = sellPrice(id, listings);
+      if (!price) continue;
+      await game.marketList(id, price);
+      sold.push(`${itemLabel(id, { short: true })} @ ${fmt(price)}`);
+    }
+    st = game.last || st;
+    if (sold.length) log.push(`🏷 Dijual di market: ${sold.join(', ')}`);
   });
 
   await step('Attribute', async () => {
@@ -149,22 +169,38 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   });
 
   // Seals come before forging: a new floor pays x1.5 $LM per room, forever.
+  // Floors: when the last boss of a floor falls and the next floor is still
+  // sealed, the server sets floor_gate = next floor and the hero stops there.
+  // Break the seal, then travel the hero through (the web client only walks on
+  // by itself when the next floor was already open).
   await step('Floor', async () => {
-    const pr = st.progress || {};
+    let pr = st.progress || {};
     const unlocked = pr.floor_unlocked || 1;
-    if ((pr.best_depth || 0) < unlocked * ZONES_PER_FLOOR) return; // floor not fully cleared yet
     const next = unlocked + 1;
-    const cost = sealCost(next);
-    const lm = st.balances?.LM || 0; const bone = st.balances?.Bone || 0;
-    if (s.autoSeal && lm >= cost.lm && bone >= cost.bone) {
-      await game.unlockFloor(next);
-      st = game.last || st;
-      log.push(`🔓 <b>Seal Floor ${next} dibuka!</b> (-${fmt(cost.lm)} $LM, -${fmt(cost.bone)} Bone). Musuh lebih kuat, hadiah ×1,5. Pindah lewat 🗺 Travel kalau hero sudah siap.`);
-      return;
+    const atGate = pr.floor_gate === next || (pr.best_depth || 0) >= unlocked * ZONES_PER_FLOOR;
+    if (atGate) {
+      const cost = sealCost(next);
+      const lm = st.balances?.LM || 0; const bone = st.balances?.Bone || 0;
+      if (s.autoSeal && lm >= cost.lm && bone >= cost.bone) {
+        await game.unlockFloor(next);
+        st = game.last || st; pr = st.progress || pr;
+        log.push(`🔓 <b>Seal Floor ${next} dibuka!</b> (−${fmt(cost.lm)} $LM, −${fmt(cost.bone)} Bone). Musuh lebih kuat, hadiah ×1,5.`);
+      } else if (store.cursor('sealAlert') !== next) {
+        store.setCursor('sealAlert', next);
+        log.push(`🏁 Floor ${unlocked} sudah clear semua! Seal Floor ${next} butuh ${fmt(cost.lm)} $LM + ${fmt(cost.bone)} Bone (kamu: ${fmt(lm)} / ${fmt(bone)}).`);
+        return;
+      }
     }
-    if (store.cursor('sealAlert') === next) return;
-    store.setCursor('sealAlert', next);
-    log.push(`🏁 Floor ${unlocked} sudah clear semua! Seal Floor ${next} butuh ${fmt(cost.lm)} $LM + ${fmt(cost.bone)} Bone (kamu: ${fmt(lm)} / ${fmt(bone)}).`);
+    // hero parked on the last region of a floor whose next floor is open: move on
+    const lastZone = (pr.zone_index ?? 0) >= ZONES_PER_FLOOR - 1;
+    if (s.autoTravel && lastZone && (pr.floor_unlocked || 1) > (pr.floor || 1)) {
+      const wait = game.travelReadyIn(st);
+      if (wait > 0) return;
+      const to = (pr.floor || 1) + 1;
+      await game.travel(to, 0);
+      st = game.last || st;
+      log.push(`🧭 Travel ke <b>Floor ${to}</b> · ${regionName(0)}. Hero lanjut menjelajah floor baru.`);
+    }
   });
 
   await step('Forge', async () => {
@@ -235,6 +271,19 @@ export function progressStats(list, now = Date.now()) {
     stuck: !!old && old.depth === cur.depth && stuckRooms >= 120,
     stuckRooms, stuckHours: old ? (now - old.at) / H : 0,
   };
+}
+
+// Just under the cheapest listing of the same item (same + level), else of the
+// same base item; never below what salvaging it would give.
+const SALVAGE_BONE = { common: 30, uncommon: 80, rare: 200, epic: 500, legendary: 1200, mythic: 3000 };
+export function sellPrice(id, listings, boneLm = 4.4) {
+  const info = itemInfo(id);
+  const same = listings.filter((l) => l.itemId === id).map((l) => l.price);
+  const base = listings.filter((l) => itemInfo(l.itemId).baseId === info.baseId).map((l) => l.price);
+  const ref = same.length ? Math.min(...same) : base.length ? Math.min(...base) : 0;
+  if (!ref) return 0;
+  const floor = Math.ceil((SALVAGE_BONE[info.rarity] || 30) * boneLm * 1.1);
+  return Math.max(floor, ref - 1);
 }
 
 // Pull item / pet ids out of a chest-open response, whatever shape it has.
