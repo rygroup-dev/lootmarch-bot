@@ -493,6 +493,7 @@ export function createBot({ cfg, store, game, autopilot }) {
   bot.callbackQuery('mk:mine', h(async (ctx) => show(ctx, V.myListingsView(await game.state(ST)))));
   bot.callbackQuery(/^mk:cancel:(.+)$/, h(async (ctx) => confirm(ctx, 'Batalkan listing ini? Item kembali, fee 2,5% tidak kembali.', async (c) => {
     await game.marketCancel(ctx.match[1]);
+    store.setCursor('cancelledListings', [...store.cursor('cancelledListings', []), ctx.match[1]]); // not a sale
     await show(c, V.myListingsView(game.last));
   })));
   bot.callbackQuery('mk:hist', h(async (ctx) => show(ctx, V.historyView(await game.marketHistory(), game.last?.character?.appearance?.nick))));

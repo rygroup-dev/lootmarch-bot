@@ -438,3 +438,21 @@ test('share nudge once per day, approval announced once', async () => {
   const c2 = await runRound(game, store);
   assert.ok(c2.log.some((l) => l.includes('disetujui')));
 });
+
+test('market: uncommon listed with a slot kept for rare, sales reported', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  store.setSetting('autoUpgrade', false);
+  store.setSetting('salvageLevel', 0);
+  srv.state.items = { steel_stiletto: 1, frost_glaive: 1 };            // rare + uncommon spare
+  srv.listings.push({ id: 'L6', itemId: 'frost_glaive', price: 900, at: 1, seller: 'Z' });
+  srv.state.market = [1, 2, 3].map((i) => ({ id: 'old' + i, itemId: 'iron_sword', price: 50 }));
+  await runRound(game, store);
+  const lists = srv.calls.filter((c) => c.path === '/game/market/list').map((c) => c.body.itemId);
+  assert.deepEqual(lists, ['steel_stiletto'], 'rare first; uncommon may not take the last free slot');
+  assert.ok(srv.calls.some((c) => c.path === '/game/inventory/destroy' && c.body.itemId === 'frost_glaive'), 'uncommon without a slot is salvaged');
+  srv.state.market = srv.state.market.filter((l) => l.id !== 'old1'); // old1 sold
+  store.setCursor('lootAt', 0);
+  const r = await runRound(game, store);
+  assert.ok(r.log.some((l) => l.includes('Terjual') && l.includes('Iron Sword')));
+});

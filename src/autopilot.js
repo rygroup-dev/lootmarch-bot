@@ -147,22 +147,43 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     if (quickErr) throw quickErr;
   });
 
+  // Market: report what sold since last round, then list spare gear above
+  // salvageLevel (rarest first). One of the 5 slots is kept for rare+ gear;
+  // an uncommon that finds no slot is salvaged instead of piling up.
   await step('Sell', async () => {
+    const mine = st.market || [];
+    const prev = store.cursor('myListings', {});
+    const cancelled = store.cursor('cancelledListings', []);
+    const gone = Object.entries(prev).filter(([id]) => !mine.some((l) => l.id === id) && !cancelled.includes(id));
+    if (gone.length) log.push('💰 <b>Terjual</b>: ' + gone.map(([, l]) => `${itemLabel(l.itemId, { short: true })} → +${fmt(l.price)} $LM`).join(', '));
+    const snapshot = () => store.setCursor('myListings', Object.fromEntries((st.market || []).map((l) => [l.id, { itemId: l.itemId, price: l.price }])));
+    snapshot();
+    if (cancelled.length) store.setCursor('cancelledListings', []);
+
     if (!s.autoSell) return;
-    const slots = 5 - (st.market || []).length;
-    if (slots <= 0) return;
-    const spare = Object.entries(st.items || {}).filter(([id, q]) => q > 0 && itemInfo(id).kind === 'gear' && (RARITY_RANK[itemInfo(id).rarity] ?? 0) > s.salvageLevel);
+    const spare = Object.entries(st.items || {})
+      .filter(([id, q]) => q > 0 && itemInfo(id).kind === 'gear' && (RARITY_RANK[itemInfo(id).rarity] ?? 0) > s.salvageLevel)
+      .sort((x, y) => (RARITY_RANK[itemInfo(y[0]).rarity] ?? 0) - (RARITY_RANK[itemInfo(x[0]).rarity] ?? 0));
     if (!spare.length) return;
     const { listings } = await game.cached('market:all', 30000, () => game.market({}));
-    const sold = [];
-    for (const [id] of spare.slice(0, slots)) {
+    const listed = []; const salvaged = [];
+    for (const [id, q] of spare) {
+      const free = 5 - (st.market || []).length;
+      const rareUp = (RARITY_RANK[itemInfo(id).rarity] ?? 0) >= RARITY_RANK.rare;
       const price = sellPrice(id, listings);
-      if (!price) continue;
-      await game.marketList(id, price);
-      sold.push(`${itemLabel(id, { short: true })} @ ${fmt(price)}`);
+      if (price && (rareUp ? free > 0 : free > 1)) {
+        await game.marketList(id, price);
+        st = game.last || st;
+        listed.push(`${itemLabel(id, { short: true })} @ ${fmt(price)}`);
+      } else if (!rareUp && s.autoSalvage) {
+        for (let i = 0; i < Math.min(q, 5); i++) await game.salvageOne(id);
+        st = game.last || st;
+        salvaged.push(itemLabel(id, { short: true }));
+      }
     }
-    st = game.last || st;
-    if (sold.length) log.push(`🏷 Dijual di market: ${sold.join(', ')}`);
+    snapshot();
+    if (listed.length) log.push(`🏷 Dijual di market: ${listed.join(', ')}`);
+    if (salvaged.length) log.push(`♻️ Slot market penuh, di-salvage: ${salvaged.join(', ')}`);
   });
 
   await step('Attribute', async () => {
