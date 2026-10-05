@@ -25,7 +25,7 @@ const ON = (b) => (b ? '✅' : '▫️');
 // ---------------------------------------------------------------- home
 const ago = (ms) => (ms ? dur((Date.now() - ms) / 1000) + ' lalu' : 'belum');
 
-export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings, desktopUrl } = {}) {
+export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings, desktopUrl, prog } = {}) {
   const c = st.character || {};
   const pr = st.progress || {};
   const b = st.balances || {};
@@ -58,6 +58,7 @@ export function homeView(st, { live, online, autopilot, daily, pass, lastRun, ne
     else if (live.valid) lines.push(`🛡 Live check: ✅ aktif ${dur(live.expiresAt - Date.now() / 1000)} lagi`);
     else lines.push('🛡 Live check: 💤 kedaluwarsa (normal saat offline)');
   }
+  if (prog) lines.push(prog.activeRecently ? `⚔️ Online: <b>${n(prog.roomsPerHour)}</b> room/jam${prog.stuck ? ' · 🧱 mentok di boss' : ''}` : '⚔️ Online: 💤 tidak ada room 30 menit terakhir');
   lines.push('━━━━━━━━━━━━━━━━━━');
   const ap = [`🤖 Autopilot ${autopilot ? 'ON' : 'OFF'} · jalan ${ago(lastRun)}`];
   if (settings?.autoAfk && nextAfkIn != null) ap.push(`💤 AFK ${nextAfkIn > 0 ? 'diklaim ' + dur(nextAfkIn) + ' lagi' : 'segera'}`);

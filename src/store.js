@@ -50,7 +50,7 @@ export class Store {
     this.file = path.join(dir, 'state.json');
     this.secret = secret;
     fs.mkdirSync(dir, { recursive: true });
-    this.data = { settings: { ...DEFAULT_SETTINGS }, session: null, wallet: null, cursor: {}, log: [] };
+    this.data = { settings: { ...DEFAULT_SETTINGS }, session: null, wallet: null, cursor: {}, log: [], samples: [] };
     if (fs.existsSync(this.file)) {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.data = { ...this.data, ...raw, settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) } };

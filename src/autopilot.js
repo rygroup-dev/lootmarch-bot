@@ -1,5 +1,5 @@
 import { ApiError } from './api.js';
-import { itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, heroPower } from './catalog.js';
+import { itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, heroPower, regionName } from './catalog.js';
 import { BUILDS, resolveBuild } from './game.js';
 
 const H = 3600 * 1000;
@@ -27,18 +27,40 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   }
   if (store.cursor('heroAlert')) store.setCursor('heroAlert', 0);
 
+  // Track online play (rooms cleared today, deepest region) to spot an active
+  // browser, report room/hour and notice a hero stuck at a boss.
+  let prog = null;
+  await step('Progress', async () => {
+    const p = await game.cached('pass', 60000, () => game.pass());
+    prog = recordProgress(store, { at: now, rooms: p.today?.rooms ?? 0, depth: st.progress?.best_depth ?? 0, zone: st.progress?.zone_index ?? 0, floor: st.progress?.floor ?? 1 });
+  });
+
   await step('Live check', async () => {
     if (!s.alertLive) return;
     const lv = await game.live(0);
     const held = lv.held || 0;
-    const bad = lv.needed && held > 0; // expired with nothing held is normal while offline
-    const last = store.cursor('liveAlertAt');
-    if (bad && now - last > H) {
+    const left = (lv.expiresAt || 0) - now / 1000;
+    const active = prog?.activeRecently; // a browser tab cleared rooms in the last 30 min
+    const where = game.cfg?.desktopUrl ? `<a href="${game.cfg.desktopUrl}">layar game</a>` : 'game di browser';
+    // While playing online, warn as soon as the check is due (the game asks 5 min early)
+    // so the hero is not stalled; offline, only $LM actually held matters.
+    const due = lv.needed && active && (!lv.valid || left < 6 * 60);
+    const key = due ? 'exp:' + lv.expiresAt : held > 0 ? 'held' : '';
+    if (due && store.cursor('liveAlertKey', '') !== key) {
+      store.setCursor('liveAlertKey', key);
+      log.push(`🛡 <b>Captcha live check ${lv.valid ? 'sebentar lagi muncul' : 'menunggu'}</b> — hero ${lv.valid ? 'akan' : 'sedang'} tertahan. Buka ${where} dan centang "Verify you are human".`);
+    } else if (!due && held > 0 && now - store.cursor('liveAlertAt') > H) {
       store.setCursor('liveAlertAt', now);
-      const where = game.cfg?.desktopUrl ? `<a href="${game.cfg.desktopUrl}">layar game</a>` : 'game di browser';
-      log.push(`🛡 <b>Live check</b> perlu dilewati${held ? `: ${fmt(held)} $LM tertahan` : ''}. Buka ${where} dan klik captcha-nya, $LM langsung cair.`);
+      log.push(`🛡 <b>Live check</b>: ${fmt(held)} $LM tertahan. Buka ${where} dan klik captcha-nya, $LM langsung cair.`);
     }
-    if (!bad && last) store.setCursor('liveAlertAt', 0);
+    if (lv.valid && left > 6 * 60) store.setCursor('liveAlertKey', '');
+  });
+
+  await step('Stuck', async () => {
+    if (!prog?.stuck) return;
+    if (store.cursor('stuckDepth') === prog.depth) return;
+    store.setCursor('stuckDepth', prog.depth);
+    log.push(`🧱 <b>Hero mentok</b> di Floor ${prog.floor} · ${regionName(prog.zone)}: ${fmt(prog.stuckRooms)} room dalam ${Math.round(prog.stuckHours)} jam tanpa naik region (kemungkinan kalah di boss). Saran: 🛍 Upgrade dari Market, nyalakan 🔨 Auto forge, atau 🗺 Travel mundur 1 region untuk farming dulu.`);
   });
 
   await step('AFK', async () => {
@@ -184,6 +206,35 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   });
 
   return { log, errors };
+}
+
+// Keep ~6 h of 5-minute samples. Rooms are "cleared today" and reset at 00:00 UTC.
+export function recordProgress(store, sample) {
+  const list = (store.data.samples ||= []);
+  const last = list[list.length - 1];
+  if (last && sample.rooms < last.rooms) for (const x of list) x.rooms -= last.rooms; // new day: rebase
+  list.push(sample);
+  while (list.length && sample.at - list[0].at > 6 * H) list.shift();
+  store.save();
+  return progressStats(list, sample.at);
+}
+
+export function progressStats(list, now = Date.now()) {
+  const cur = list[list.length - 1];
+  if (!cur) return null;
+  const since = (ms) => list.find((x) => now - x.at <= ms) || cur;
+  const h1 = since(H); const m30 = since(H / 2);
+  const roomsPerHour = cur.at > h1.at ? ((cur.rooms - h1.rooms) * H) / (cur.at - h1.at) : 0;
+  // stuck: 3 h+ of steady clearing (≥ 120 rooms) without a deeper region
+  const old = list.find((x) => now - x.at >= 3 * H && now - x.at <= 3.5 * H) || (now - list[0].at >= 3 * H ? list[0] : null);
+  const stuckRooms = old ? cur.rooms - old.rooms : 0;
+  return {
+    ...cur,
+    roomsPerHour,
+    activeRecently: cur.rooms > m30.rooms,
+    stuck: !!old && old.depth === cur.depth && stuckRooms >= 120,
+    stuckRooms, stuckHours: old ? (now - old.at) / H : 0,
+  };
 }
 
 // Pull item / pet ids out of a chest-open response, whatever shape it has.

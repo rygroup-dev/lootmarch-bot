@@ -372,3 +372,30 @@ test('upgrade planner skips poor-value buys', async () => {
   const plan = suggestUpgrades(st, [{ id: 'X', itemId: 'leather_hood', price: 5000 }], 20000);
   assert.equal(plan.picks.length, 0);
 });
+
+test('progress: room rate, active browser, stuck at a boss, day rollover', async () => {
+  const { recordProgress } = await import('../src/autopilot.js');
+  const store = new Store(tmp(), SECRET);
+  const H = 3600e3; const t0 = Date.now() - 4 * H;
+  let p;
+  for (let i = 0; i <= 48; i++) p = recordProgress(store, { at: t0 + i * 5 * 60e3, rooms: i * 20, depth: 3, zone: 2, floor: 1 });
+  assert.ok(Math.abs(p.roomsPerHour - 240) < 1);
+  assert.ok(p.activeRecently && p.stuck && p.stuckRooms >= 120);
+  p = recordProgress(store, { at: t0 + 49 * 5 * 60e3, rooms: 5, depth: 4, zone: 3, floor: 1 }); // past midnight + new region
+  assert.ok(!p.stuck);
+  assert.ok(store.data.samples.every((x, i, a) => i === 0 || x.rooms >= a[i - 1].rooms - 1e9));
+});
+
+test('captcha alert comes early while the browser is playing', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  const now = Date.now();
+  store.data.samples = [{ at: now - 20 * 60e3, rooms: 10, depth: 3, zone: 2, floor: 1 }];
+  srv.pass.today = { rooms: 60, roomXp: 300 };
+  srv.live = { needed: true, valid: true, held: 0, expiresAt: Math.floor(now / 1000) + 120 };
+  const a = await runRound(game, store);
+  assert.ok(a.log.some((l) => l.includes('sebentar lagi muncul')));
+  game.forget('pass');
+  const b = await runRound(game, store);
+  assert.ok(!b.log.some((l) => l.includes('Captcha')), 'once per expiry');
+});

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { Bot, GrammyError, InlineKeyboard } from 'grammy';
 import { ethers } from 'ethers';
 import * as V from './views.js';
-import { esc, runRound } from './autopilot.js';
+import { esc, runRound, progressStats } from './autopilot.js';
 import { itemInfo, itemLabel, petInfo, CAT, CLASS_LOOK, randomLook, cleanNick } from './catalog.js';
 import { BUILDS } from './game.js';
 import { WalletService, isAddress, parseAmount, fmtEth, fmtUnits } from './wallet.js';
@@ -95,6 +95,7 @@ export function createBot({ cfg, store, game, autopilot }) {
     const afkAt = store.cursor('afkAt');
     return show(ctx, V.homeView(st, {
       live, online, daily, pass, settings: s, autopilot: true, desktopUrl: cfg.desktopUrl,
+      prog: progressStats(store.data.samples || []),
       lastRun: store.cursor('lastRun'),
       nextAfkIn: afkAt ? (afkAt + s.afkHours * 3600000 - Date.now()) / 1000 : 0,
       travelIn: game.travelReadyIn(st),
