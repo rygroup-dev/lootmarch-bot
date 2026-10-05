@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+data/*
+!data/catalog.json
+recon/
+*.har
+*.log
+.DS_Store
+.claude-flow/
+.claude/
+.swarm/
+.hive-mind/
