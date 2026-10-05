@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { loadConfig } from './config.js';
 import { Store } from './store.js';
 import { Game } from './game.js';
@@ -9,6 +12,23 @@ if (cfg.missing.length) {
   console.error('Isi dulu .env: ' + cfg.missing.join(', '));
   process.exit(1);
 }
+
+// One bot per token: a second copy would fight the first for Telegram updates.
+// Exit code 3 tells the Windows run loop to stop instead of retrying.
+const pidFile = path.join(cfg.dataDir, 'bot.pid');
+fs.mkdirSync(cfg.dataDir, { recursive: true });
+try {
+  const old = Number(fs.readFileSync(pidFile, 'utf8'));
+  const bootedAt = Date.now() - os.uptime() * 1000;
+  const fromThisBoot = fs.statSync(pidFile).mtimeMs > bootedAt; // after a reboot the PID may belong to anything
+  if (old && old !== process.pid && fromThisBoot) {
+    process.kill(old, 0); // throws if that process is gone
+    console.error(`Bot sudah jalan (PID ${old}). Hentikan dulu sebelum menjalankan lagi.`);
+    process.exit(3);
+  }
+} catch { /* no pid file or stale pid */ }
+fs.writeFileSync(pidFile, String(process.pid));
+process.on('exit', () => { try { if (Number(fs.readFileSync(pidFile, 'utf8')) === process.pid) fs.unlinkSync(pidFile); } catch { /* gone */ } });
 
 const store = new Store(cfg.dataDir, cfg.secret);
 // Fail fast if SECRET_KEY changed: sealed data would be unreadable later anyway.

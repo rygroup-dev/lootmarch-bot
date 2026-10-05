@@ -4,19 +4,38 @@ Panel kontrol Telegram untuk **satu akun** [LootMarch](https://lootmarch.xyz), g
 
 ## Pasang (satu baris)
 
+### Linux / VPS (disarankan, jalan 24 jam)
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rygroup-dev/lootmarch-bot/main/install.sh | bash
 ```
 
-Installer akan:
-1. memasang `git`, `curl`, dan Node.js 22 kalau belum ada,
-2. clone repo ke `~/lootmarch-bot` dan memasang dependency,
-3. menanyakan **BOT_TOKEN** (dari [@BotFather](https://t.me/BotFather)) dan **ID Telegram** kamu (cek di [@userinfobot](https://t.me/userinfobot)),
-4. membuat `SECRET_KEY` acak dan menjalankan bot sebagai service systemd `lootmarch-bot`.
+Installer memasang `git`, `curl`, dan Node.js 22 kalau belum ada, clone ke `~/lootmarch-bot`, menanyakan **BOT_TOKEN** dan **ID Telegram**, membuat `SECRET_KEY` acak, lalu menjalankan bot sebagai service systemd `lootmarch-bot`.
 
-Lalu buka bot kamu di Telegram: `/start` → 💰 Wallet → 🔑 Import key. Bot langsung login ke game.
+### Windows 10/11
 
-Update ke versi terbaru: jalankan perintah yang sama lagi (`.env` dan data kamu tetap aman).
+Buka **PowerShell** (tidak perlu Administrator), lalu tempel:
+
+```powershell
+irm https://raw.githubusercontent.com/rygroup-dev/lootmarch-bot/main/install.ps1 | iex
+```
+
+Installer memasang Node.js LTS (lewat `winget` atau MSI resmi), mengunduh kode ke `%USERPROFILE%\lootmarch-bot` (tanpa perlu git), menanyakan token & ID Telegram, lalu menjalankan bot **di latar belakang** dan otomatis start setiap login Windows (Task Scheduler `LootMarchBot`). Kalau crash, bot restart sendiri dalam 10 detik.
+
+| Perlu | Perintah |
+|---|---|
+| Lihat log | `notepad %USERPROFILE%\lootmarch-bot\bot.log` |
+| Hentikan | `powershell -ExecutionPolicy Bypass -File "%USERPROFILE%\lootmarch-bot\windows\stop.ps1"` |
+| Jalankan lagi | `Start-ScheduledTask -TaskName LootMarchBot` |
+| Update | jalankan perintah install yang sama (`.env` & data aman) |
+
+Di Windows, bot hanya jalan selama PC menyala. Matikan *Sleep* di Settings → System → Power kalau mau jalan terus.
+
+### Setelah terpasang
+
+Buka bot kamu di Telegram: `/start` → 💰 Wallet → 🔑 Import key. Bot langsung login ke game dengan private key. Akun baru akan diajak memilih class, nama, dan tampilan hero.
+
+Bahan yang dibutuhkan: token bot dari [@BotFather](https://t.me/BotFather) dan ID Telegram dari [@userinfobot](https://t.me/userinfobot).
 
 ## Fitur
 
@@ -73,7 +92,7 @@ Hadiah AFK = **75% dari rate online kamu sendiri** (24 jam terakhir), maksimal 8
 ```bash
 npm install
 cp .env.example .env   # isi BOT_TOKEN, OWNER_IDS, SECRET_KEY
-npm test               # 40 tes, tanpa jaringan
+npm test               # 41 tes, tanpa jaringan
 npm start
 ```
 
