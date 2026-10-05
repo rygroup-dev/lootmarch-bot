@@ -17,6 +17,7 @@ export function loadConfig(env = process.env) {
     explorer: (env.EXPLORER_URL || 'https://robinhoodchain.blockscout.com').replace(/\/$/, ''),
     tickSeconds: Math.max(60, Number(env.TICK_SECONDS || 300)),
     feedSeconds: Math.max(30, Number(env.FEED_SECONDS || 60)),
+    desktopUrl: env.DESKTOP_URL || '', // optional remote browser (noVNC) where the game tab runs
   };
   const missing = [];
   if (!cfg.botToken) missing.push('BOT_TOKEN');

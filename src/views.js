@@ -25,7 +25,7 @@ const ON = (b) => (b ? '✅' : '▫️');
 // ---------------------------------------------------------------- home
 const ago = (ms) => (ms ? dur((Date.now() - ms) / 1000) + ' lalu' : 'belum');
 
-export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings } = {}) {
+export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings, desktopUrl } = {}) {
   const c = st.character || {};
   const pr = st.progress || {};
   const b = st.balances || {};
@@ -70,6 +70,7 @@ export function homeView(st, { live, online, autopilot, daily, pass, lastRun, ne
     .text('💰 Wallet', 'nav:wallet').text('📖 Codex', 'nav:codex').text('🏆 Ranks', 'nav:ranks').row()
     .text('🤖 Jalankan autopilot', 'auto:run').text('📋 Log', 'nav:log').row()
     .text('⚙️ Setelan', 'nav:set').text('🔄 Refresh', 'nav:refresh');
+  if (desktopUrl) kb.row().url('🖥 Buka layar game (VPS)', desktopUrl);
   return { text: lines.join('\n'), kb };
 }
 

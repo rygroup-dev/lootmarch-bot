@@ -94,7 +94,7 @@ export function createBot({ cfg, store, game, autopilot }) {
     const s = store.settings;
     const afkAt = store.cursor('afkAt');
     return show(ctx, V.homeView(st, {
-      live, online, daily, pass, settings: s, autopilot: true,
+      live, online, daily, pass, settings: s, autopilot: true, desktopUrl: cfg.desktopUrl,
       lastRun: store.cursor('lastRun'),
       nextAfkIn: afkAt ? (afkAt + s.afkHours * 3600000 - Date.now()) / 1000 : 0,
       travelIn: game.travelReadyIn(st),

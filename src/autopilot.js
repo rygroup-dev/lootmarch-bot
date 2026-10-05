@@ -35,7 +35,8 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     const last = store.cursor('liveAlertAt');
     if (bad && now - last > H) {
       store.setCursor('liveAlertAt', now);
-      log.push(`🛡 <b>Live check</b> perlu dilewati${held ? `: ${fmt(held)} $LM tertahan` : ''}. Buka game di browser sebentar, $LM langsung cair.`);
+      const where = game.cfg?.desktopUrl ? `<a href="${game.cfg.desktopUrl}">layar game</a>` : 'game di browser';
+      log.push(`🛡 <b>Live check</b> perlu dilewati${held ? `: ${fmt(held)} $LM tertahan` : ''}. Buka ${where} dan klik captcha-nya, $LM langsung cair.`);
     }
     if (!bad && last) store.setCursor('liveAlertAt', 0);
   });
