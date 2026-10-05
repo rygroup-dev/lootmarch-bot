@@ -35,7 +35,11 @@ export function itemInfo(id) {
   return { id: String(id), baseId, plus, name: prettify(baseId), rarity: 'common', kind: 'unknown' };
 }
 
+export const PET_PREFIX = 'pet:'; // market/item ids of pets: "pet:craboulder:epic"
+export const isPetId = (id) => String(id).startsWith(PET_PREFIX) || PETS.has(String(id));
+
 export function petInfo(id) {
+  id = String(id).startsWith(PET_PREFIX) ? String(id).slice(PET_PREFIX.length) : id;
   const p = PETS.get(id);
   if (p) return p;
   const [base, rarity = 'common'] = String(id).split(':');
@@ -113,3 +117,63 @@ export const PET_ABILITY = { leafhopper: 'Lily Pad – heal', shellby: 'Shell Gu
 
 export const SHOP_CHESTS = ['chest_common', 'chest_rare', 'chest_epic', 'chest_legendary', 'chest_mythic_weapon', 'chest_mythic_equipment'];
 export const PET_CHESTS = ['common', 'epic', 'legendary', 'mythic'];
+
+// ---- hero power (same formula as the game's "Power" number) ----
+export const BASE_STATS = { maxHp: 100, dmg: 14, speed: 70, block: 0.12, crit: 0.1, critDmg: 0.8, atkSpd: 0, regen: 0, dr: 0, lifesteal: 0, cdr: 0, dodge: 0 };
+const ATTR_STATS = { str: { dmg: 2 }, vit: { maxHp: 8 }, agi: { speed: 2, dodge: 0.01 }, def: { block: 0.01 }, vam: { lifesteal: 0.0025 } };
+const STAT_CAP = { block: 0.6, crit: 0.6, critDmg: 2.5, atkSpd: 1, dr: 0.5, lifesteal: 0.1, cdr: 0.4, speed: 160, regen: 15 };
+
+export function power(s) {
+  const mult = (1 + (s.crit || 0) * (s.critDmg || 0)) * (1 + (s.atkSpd || 0));
+  return Math.round(s.dmg * 6 * mult + (s.maxHp * 0.8) / (1 - Math.min(0.5, s.dr || 0)) + s.speed * 0.6 + s.block * 500 + (s.regen || 0) * 40 + (s.lifesteal || 0) * 1500 + (s.cdr || 0) * 300);
+}
+
+export function heroStats(st, equipped = st?.equipped || {}) {
+  const out = { ...BASE_STATS };
+  const add = (obj, mul = 1) => { for (const [k, v] of Object.entries(obj || {})) out[k] = (out[k] || 0) + v * mul; };
+  for (const [a, n] of Object.entries(st?.character?.attrs || {})) for (const [k, v] of Object.entries(ATTR_STATS[a] || {})) out[k] += v * n;
+  for (const id of Object.values(equipped)) if (id) add(itemStats(itemInfo(id)));
+  const pet = st?.pets?.activePet;
+  if (pet) {
+    const own = (st.pets.owned || []).find((p) => p.petId === pet);
+    add(petBonus(pet, petProgress(own?.xp || 0).level));
+  }
+  for (const [k, cap] of Object.entries(STAT_CAP)) if (out[k] > cap) out[k] = cap;
+  return out;
+}
+
+export const heroPower = (st, equipped) => power(heroStats(st, equipped));
+
+export function canWear(st, id) {
+  const i = itemInfo(id);
+  if (i.kind !== 'gear') return false;
+  return i.slot !== 'weapon' || i.weaponType === st?.character?.classId;
+}
+
+// ---- hero creation (rules from the game's Customize scene) ----
+export const NICK_MAX = 12;
+export function cleanNick(v) {
+  const t = String(v || '').trim().replace(/\s+/g, ' ');
+  return t && t.length <= NICK_MAX && /^[A-Za-z0-9_ ]+$/.test(t) ? t : null;
+}
+export const LOOK = { skin: [1, 6], face: [1, 7], hairStyle: ['m1', 'm2', 'm3', 'm7', 'f5'], hairCol: [1, 10], clothStyle: [13, 14, 8, 15, 7], clothCol: [1, 8] };
+// Default look per class, same order as the game's class list.
+export const CLASS_LOOK = {
+  sword: { hairStyle: 'm1', hairCol: 3, clothStyle: 13, clothCol: 4, skin: 1, face: 1 },
+  spear: { hairStyle: 'm2', hairCol: 4, clothStyle: 14, clothCol: 4, skin: 1, face: 1 },
+  wand: { hairStyle: 'm3', hairCol: 5, clothStyle: 8, clothCol: 5, skin: 1, face: 1 },
+  axe: { hairStyle: 'm7', hairCol: 10, clothStyle: 15, clothCol: 4, skin: 1, face: 1 },
+  dagger: { hairStyle: 'f5', hairCol: 10, clothStyle: 7, clothCol: 2, skin: 1, face: 1 },
+};
+export function randomLook(rand = Math.random) {
+  const pick = (a) => a[Math.floor(rand() * a.length)];
+  const num = ([lo, hi]) => lo + Math.floor(rand() * (hi - lo + 1));
+  return { skin: num(LOOK.skin), face: num(LOOK.face), hairStyle: pick(LOOK.hairStyle), hairCol: num(LOOK.hairCol), clothStyle: pick(LOOK.clothStyle), clothCol: num(LOOK.clothCol) };
+}
+export const CLASS_INFO = {
+  wand: { skill: 'Fireball', text: 'Bola api jarak jauh 270% + splash. Paling aman (jarang kena pukul), mendominasi ranking terdalam.' },
+  spear: { skill: 'Pierce', text: 'Tusukan panjang 260%, kena semua musuh dalam satu garis. Jangkauan jauh.' },
+  axe: { skill: 'Cleave', text: 'Pukulan berat 310% kena musuh di samping + stun. Damage skill tertinggi, jarak dekat.' },
+  sword: { skill: 'Whirlwind', text: 'Putaran 215% kena semua musuh di sekitar. Seimbang, jarak dekat.' },
+  dagger: { skill: 'Shadow Step', text: 'Lompat ke target 200%, single target. Lincah tapi paling rapuh.' },
+};

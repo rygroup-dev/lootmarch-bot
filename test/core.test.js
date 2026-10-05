@@ -111,6 +111,16 @@ test('expired session is renewed with the key once', async () => {
 });
 
 // ------------------------------------------------------------------ hero logic
+test('auto attributes send only the new points', async () => {
+  const { srv, game } = setup();
+  await game.login();
+  srv.state.character.sp = 3;
+  await game.autoAttributes('balanced');
+  const c = srv.calls.find((x) => x.path === '/game/character/attributes');
+  assert.equal(Object.values(c.body.attributes).reduce((a, b) => a + b, 0), 3);
+  assert.equal(srv.state.character.sp, 0);
+});
+
 test('planAttributes spends exactly sp points and respects the VAM cap', () => {
   for (const build of ['balanced', 'damage', 'tank']) {
     const base = { str: 0, vit: 0, agi: 0, def: 0, vam: 0 };
@@ -125,12 +135,14 @@ test('planAttributes spends exactly sp points and respects the VAM cap', () => {
   assert.deepEqual(planAttributes({ str: 5, vit: 0, agi: 0, def: 0, vam: 0 }, 0), { str: 5, vit: 0, agi: 0, def: 0, vam: 0 });
 });
 
-test('attributes are sent as the full allocation', async () => {
+test('attributes are sent as points to add, like the web client', async () => {
   const { srv, game } = setup();
   await game.login();
   await game.addAttribute('vit', 1);
   const c = srv.calls.find((x) => x.path === '/game/character/attributes');
-  assert.deepEqual(c.body.attributes, { agi: 0, def: 0, str: 1, vam: 0, vit: 1 });
+  assert.deepEqual(c.body.attributes, { agi: 0, def: 0, str: 0, vam: 0, vit: 1 });
+  assert.equal(srv.state.character.attrs.vit, 1);
+  assert.equal(srv.state.character.attrs.str, 1, 'existing points untouched');
   assert.ok(c.body.actionId);
   await assert.rejects(game.addAttribute('vit', 1), /tidak cukup/);
 });
@@ -175,7 +187,8 @@ test('autopilot round: AFK, loot, equip, salvage, attrs, quests', async () => {
   const { log, errors } = await runRound(game, store);
   assert.deepEqual(errors, []);
   const paths = srv.calls.map((c) => c.path);
-  for (const p of ['/offline/claim', '/game/loot/claim', '/game/equipment/best', '/game/inventory/salvage', '/game/character/attributes', '/game/daily/mission/claim', '/game/daily/login/claim']) {
+  assert.ok(log.some((l) => l.includes('Chest dibuka') && l.includes('Steel Stiletto')), 'pass/quest chests are opened');
+  for (const p of ['/offline/claim', '/game/loot/claim', '/game/chest/open', '/game/equipment/best', '/game/inventory/salvage', '/game/character/attributes', '/game/daily/mission/claim', '/game/daily/login/claim']) {
     assert.ok(paths.includes(p), 'missing ' + p);
   }
   assert.ok(!paths.includes('/game/forge'), 'forge is opt-in');
@@ -226,6 +239,8 @@ test('forgeTarget picks the lowest + level, weapon first on ties', () => {
 test('live check alert fires once per hour while $LM is held', async () => {
   const { srv, store, game } = setup();
   await game.login();
+  srv.live = { needed: true, valid: false, held: 0, expiresAt: 0 };
+  assert.ok(!(await runRound(game, store)).log.some((l) => l.includes('Live check')), 'expired but nothing held: stay quiet');
   srv.live = { needed: true, valid: false, held: 5000, expiresAt: 0 };
   const a = await runRound(game, store);
   assert.ok(a.log.some((l) => l.includes('5,000 $LM tertahan')));
@@ -274,4 +289,78 @@ test('premium pass analysis scales with reachable tiers', () => {
   assert.ok(full.reach > low.reach);
   assert.ok(full.value > low.value);
   assert.ok(full.extra >= 3 + 1); // pet chest common + rare chest
+});
+
+test('build follows the class: ranged goes damage, melee balanced; caps hold', async () => {
+  const { resolveBuild } = await import('../src/game.js');
+  assert.equal(resolveBuild('auto', 'wand'), 'damage');
+  assert.equal(resolveBuild('auto', 'dagger'), 'balanced');
+  assert.equal(resolveBuild('tank', 'wand'), 'tank');
+  const wand = planAttributes({}, 300, 'auto', 'wand');
+  const dag = planAttributes({}, 300, 'auto', 'dagger');
+  assert.ok(wand.str > dag.str && dag.vit > wand.vit);
+  assert.ok(wand.agi <= 20 && wand.vam <= 20 && dag.agi <= 20);
+  assert.equal(Object.values(wand).reduce((a, b) => a + b, 0), 300);
+});
+
+test('premium pass reminder fires once when tier 50 is reached', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  srv.pass = makePass({ tier: 50, xp: 25000 });
+  const a = await runRound(game, store);
+  assert.ok(a.log.some((l) => l.includes('Pass Premium')));
+  store.setCursor('passAt', 0);
+  const b = await runRound(game, store);
+  assert.ok(!b.log.some((l) => l.includes('Pass Premium')));
+});
+
+test('GET retries a transient 502, POST does not', async () => {
+  let n = 0;
+  const api = new LootMarchApi({ fetchImpl: async (url, init) => {
+    n++;
+    if (n === 1 || init.method === 'POST') return new Response('bad gateway', { status: 502 });
+    return new Response('{"ok":1}', { status: 200 });
+  } });
+  assert.deepEqual(await api.status(), { ok: 1 });
+  assert.equal(n, 2);
+  n = 10;
+  await assert.rejects(api.lootClaim(), (e) => e.status === 502);
+  assert.equal(n, 11);
+});
+
+test('market upgrade plan: right class, empty slots first, within budget', async () => {
+  const { suggestUpgrades } = await import('../src/game.js');
+  const srv = fakeServer();
+  const st = srv.state;
+  const plan = suggestUpgrades(st, srv.listings, st.balances.LM);
+  const ids = plan.picks.map((p) => p.listing.id);
+  assert.ok(ids.includes('L2'), 'cheap armor for the empty slot');
+  assert.ok(!ids.includes('L1'), 'sabre is a sword, hero is a dagger');
+  assert.ok(!ids.includes('L3') && !ids.includes('L4'));
+  assert.ok(plan.spend <= st.balances.LM && plan.gain > 0);
+  assert.deepEqual(suggestUpgrades(st, srv.listings, 10).picks, []);
+});
+
+test('pet ids with the market prefix resolve to the pet', async () => {
+  const { petInfo, isPetId } = await import('../src/catalog.js');
+  assert.equal(petInfo('pet:craboulder:rare').name, 'Rare Craboulder');
+  assert.ok(isPetId('pet:craboulder:rare') && isPetId('leafhopper:common') && !isPetId('rusty_stiletto'));
+});
+
+test('nick rules follow the game', async () => {
+  const { cleanNick, randomLook, LOOK } = await import('../src/catalog.js');
+  assert.equal(cleanNick('  Ry  Hood '), 'Ry Hood');
+  assert.equal(cleanNick('abcdefghijklm'), null);
+  assert.equal(cleanNick('bad!'), null);
+  const l = randomLook();
+  assert.ok(LOOK.hairStyle.includes(l.hairStyle) && l.skin >= 1 && l.skin <= 6 && l.clothCol <= 8);
+});
+
+test('autopilot waits for a hero on a fresh account', async () => {
+  const st = makeState(); st.character = { userId: '0x1' };
+  const { srv, store, game } = setup({ state: st });
+  await game.login();
+  const r = await runRound(game, store);
+  assert.ok(r.log[0].includes('belum punya hero'));
+  assert.ok(!srv.calls.some((c) => c.path === '/offline/claim'));
 });

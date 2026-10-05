@@ -48,7 +48,7 @@ test('every menu opens without errors', async () => {
   const h = await harness();
   await h.text('/start');
   assert.match(h.lastText(), /TestHero/);
-  const routes = ['nav:home', 'nav:hero', 'nav:inv:0', 'nav:loot', 'afk:prev', 'nav:quest', 'nav:pass', 'pass:calc', 'nav:travel', 'nav:travel:1', 'nav:pet', 'pet:v:leafhopper:common', 'nav:shop', 'shop:c:chest_epic', 'shop:p:common', 'nav:codex', 'nav:ranks', 'nav:set', 'hero:build', 'salv:menu', 'nav:mk:all:all:0', 'nav:mk:rare:weapon:0', 'mk:v:L1', 'mk:mine', 'mk:hist', 'it:v:bronze_stiletto@2', 'it:v:chest_common'];
+  const routes = ['nav:home', 'nav:refresh', 'nav:log', 'auto:run', 'upg:plan', 'nav:hero', 'nav:inv:0', 'nav:loot', 'afk:prev', 'nav:quest', 'nav:pass', 'pass:calc', 'nav:travel', 'nav:travel:1', 'nav:pet', 'pet:v:leafhopper:common', 'nav:shop', 'shop:c:chest_epic', 'shop:p:common', 'nav:codex', 'nav:ranks', 'nav:set', 'hero:build', 'salv:menu', 'nav:mk:all:all:0', 'nav:mk:rare:weapon:0', 'mk:v:L1', 'mk:mine', 'mk:hist', 'it:v:bronze_stiletto@2', 'it:v:chest_common'];
   for (const r of routes) {
     await h.press(r);
     assert.deepEqual(h.errors().map((e) => e.payload.text), [], r);
@@ -100,4 +100,42 @@ test('private key message is deleted after import', async () => {
   await h.text('33'.repeat(32));
   assert.ok(h.sent.some((s) => s.method === 'deleteMessage'));
   assert.equal(h.store.walletAddress(), new ethers.Wallet('0x' + '33'.repeat(32)).address);
+});
+
+test('fresh account: pick class, type name, create hero', async () => {
+  const h = await harness();
+  h.srv.state.character = { userId: '0x1' };
+  h.game.last = null;
+  await h.text('/start');
+  assert.match(h.lastText(), /pilih class/);
+  await h.press('new:class:wand');
+  assert.match(h.lastText(), /nama hero/);
+  await h.text('bad name!!');
+  assert.match(h.lastText(), /tidak valid/);
+  await h.text('RyMage');
+  assert.match(h.lastText(), /RyMage/);
+  await h.press('new:look:rand');
+  await h.press('new:go');
+  assert.equal(h.srv.state.character.classId, 'wand');
+  assert.equal(h.srv.state.character.appearance.nick, 'RyMage');
+  assert.deepEqual(h.errors(), []);
+});
+
+test('market upgrade: plan, confirm, buy and wear', async () => {
+  const h = await harness();
+  await h.press('upg:plan');
+  assert.match(h.lastText(), /Hide Brigandine/);
+  await h.press('upg:buy');
+  const kb = [...h.sent].reverse().find((s) => s.payload.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data?.startsWith('cf:'));
+  await h.press(kb.payload.reply_markup.inline_keyboard[0][0].callback_data);
+  assert.equal(h.srv.state.equipped.armor, 'hide_brigandine');
+  assert.deepEqual(h.errors(), []);
+});
+
+test('no session but a key: the bot signs in by itself', async () => {
+  const h = await harness();
+  h.store.clearSession();
+  h.game.api.setCookie('');
+  await h.text('/start');
+  assert.match(h.lastText(), /TestHero/);
 });

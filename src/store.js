@@ -28,9 +28,12 @@ export const DEFAULT_SETTINGS = {
   autoLoot: true,         // move room drops from the Loot chest into the bag
   autoEquip: true,        // run "Equip best" after new gear arrives
   autoAttr: true,         // spend attribute points on level up
-  build: 'balanced',      // attribute build, see BUILDS in game.js
+  build: 'auto',          // attribute build, see BUILDS in game.js ('auto' = by class)
   autoSalvage: true,      // break spare gear into Bone (one copy of each item is always kept)
   salvageLevel: 0,        // highest rarity salvaged: 0 common, 1 uncommon, 2 rare
+  autoChest: true,        // open chests / pet chests already owned (pass & quest rewards); free
+  autoUpgrade: true,      // buy better gear from the market when it raises Power
+  upgradeShare: 0.5,      // ...spending at most this share of the game $LM balance per round
   autoSeal: true,         // break the next floor seal once the floor is cleared and it is affordable
   autoForge: false,       // spends $LM + Bone, so it is opt-in
   forgeReserveLm: 5000,   // never forge below this much $LM
@@ -47,7 +50,7 @@ export class Store {
     this.file = path.join(dir, 'state.json');
     this.secret = secret;
     fs.mkdirSync(dir, { recursive: true });
-    this.data = { settings: { ...DEFAULT_SETTINGS }, session: null, wallet: null, cursor: {} };
+    this.data = { settings: { ...DEFAULT_SETTINGS }, session: null, wallet: null, cursor: {}, log: [] };
     if (fs.existsSync(this.file)) {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.data = { ...this.data, ...raw, settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) } };
@@ -91,6 +94,15 @@ export class Store {
   }
   sessionAddress() { return this.data.session?.address || null; }
   clearSession() { this.data.session = null; this.save(); }
+
+  // --- activity log shown in the 📋 Log screen ---------------------------
+  addLog(text, source = 'auto') {
+    const log = this.data.log || (this.data.log = []);
+    log.push({ at: Date.now(), source, text });
+    if (log.length > 80) log.splice(0, log.length - 80);
+    this.save();
+  }
+  logs(n = 25) { return (this.data.log || []).slice(-n).reverse(); }
 
   // --- small bookkeeping (alert de-dup, timers) -------------------------
   cursor(k, def = 0) { return this.data.cursor[k] ?? def; }

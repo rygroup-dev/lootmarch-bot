@@ -22,8 +22,9 @@ Update ke versi terbaru: jalankan perintah yang sama lagi (`.env` dan data kamu 
 
 | Menu | Isi |
 |---|---|
-| 🏠 Home | Level, floor/region, saldo $LM (+nilai $), Bone, loot menunggu, status live check, pemain online |
-| 🧝 Hero | Attribute (+STR/VIT/AGI/DEF/VAM), auto-alokasi per build, gear terpasang, Equip best |
+| 🏠 Dashboard | Level, Power, gear, floor/region, saldo $LM (+nilai $), Bone, chest, progres quest & pass, live check, kapan autopilot terakhir jalan, AFK berikutnya, cooldown travel |
+| 🆕 Buat hero | Akun baru: pilih class (dengan penjelasan skill), nama, tampilan (preset class / acak) |
+| 🧝 Hero | Stat lengkap, attribute (+STR/VIT/AGI/DEF/VAM), build otomatis per class, Equip best, 🛍 Upgrade dari Market |
 | 🎒 Inventory | Semua item dengan rarity & stat (termasuk level forge), pakai/lepas, forge +1/+5, jual, buang, salvage |
 | 🎁 Loot & AFK | Klaim loot chest, cek & klaim hadiah AFK |
 | 📜 Quest | Misi harian, daily reward, login streak, klaim semua |
@@ -35,12 +36,14 @@ Update ke versi terbaru: jalankan perintah yang sama lagi (`.env` dan data kamu 
 | 💰 Wallet | Saldo ETH & $LM on-chain, deposit ke game, withdraw, kirim ETH/$LM, klaim deposit pakai tx hash |
 | 📖 Codex | Progres koleksi item per rarity, koleksi pet, musuh yang ditemui |
 | 🏆 Ranks | Papan Terdalam & Level |
+| 📋 Log | Riwayat aksi autopilot & aksi manual penting, dengan jam (WIB) |
 
 ### Autopilot (tiap 5 menit, bisa diatur di ⚙️ Setelan)
 
 - 💤 klaim AFK setiap N jam (default 4, maks dari server 8 jam)
-- 🎁 klaim loot → 🧥 Equip best → ♻️ salvage gear cadangan (1 copy selalu disisakan)
-- 📈 alokasi attribute point otomatis sesuai build (Seimbang / Damage / Tank)
+- 🎁 klaim loot → 📦 buka chest & pet chest yang dimiliki (hadiah pass/quest) → 🧥 Equip best → ♻️ salvage gear cadangan (1 copy selalu disisakan)
+- 🛍 upgrade gear dari market: beli listing dengan kenaikan Power terbesar per $LM, maks 50% saldo per putaran, senjata sesuai class
+- 📈 alokasi attribute point otomatis. Build *Otomatis* memilih per class: Wand/Spear → Damage, Sword/Axe/Dagger → Seimbang (VAM & AGI maks 20)
 - 🔓 **deteksi floor**: begitu 11 region clear, seal floor berikutnya dibuka kalau $LM & Bone cukup (hadiah ×1,5 per floor)
 - 🔨 auto forge (opsional, mati secara default) dengan batas cadangan $LM & Bone
 - 📜 klaim misi, daily reward, login streak · 🎫 klaim tier pass
@@ -57,7 +60,7 @@ Hadiah AFK = **75% dari rate online kamu sendiri** (24 jam terakhir), maksimal 8
 - Login memakai **private key** (tanda tangan pesan SIWE, gratis, tidak mengirim transaksi). Pesan yang ditandatangani dicek dulu: harus dari `lootmarch.xyz`, chain 4663, dan alamat kamu.
 - Private key & cookie disimpan terenkripsi **AES-256-GCM** di `data/state.json` (permission 600) memakai `SECRET_KEY` dari `.env`. Pesan Telegram berisi key langsung dihapus.
 - Hanya ID Telegram di `OWNER_IDS` yang bisa memakai bot.
-- Kalau server minta captcha saat login, login sekali di browser lalu kirim header Cookie lewat ⚙️ → 🍪 Pakai cookie.
+- Sesi login diurus otomatis: kalau habis, bot login ulang sendiri pakai key. (Cadangan darurat: kalau suatu saat server minta captcha, login di browser lalu kirim header Cookie lewat `/cookie`.)
 - **Pakai wallet khusus game**, jangan wallet utama.
 
 ## Penting
@@ -70,7 +73,7 @@ Hadiah AFK = **75% dari rate online kamu sendiri** (24 jam terakhir), maksimal 8
 ```bash
 npm install
 cp .env.example .env   # isi BOT_TOKEN, OWNER_IDS, SECRET_KEY
-npm test               # 29 tes, tanpa jaringan
+npm test               # 40 tes, tanpa jaringan
 npm start
 ```
 

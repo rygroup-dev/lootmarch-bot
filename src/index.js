@@ -23,11 +23,11 @@ const game = new Game({ cfg, store });
 const bot = createBot({ cfg, store, game });
 
 await bot.api.setMyCommands([
-  { command: 'start', description: 'Menu utama' },
-  { command: 'status', description: 'Ringkasan hero' },
+  { command: 'start', description: 'Dashboard' },
+  { command: 'status', description: 'Dashboard (data segar)' },
   { command: 'afk', description: 'Klaim AFK sekarang' },
   { command: 'auto', description: 'Jalankan autopilot sekarang' },
-  { command: 'cookie', description: 'Login pakai cookie browser' },
+  { command: 'log', description: 'Log aktivitas' },
   { command: 'help', description: 'Bantuan' },
 ]).catch((e) => console.error('[setMyCommands]', e.message));
 
@@ -36,6 +36,12 @@ if (store.hasWallet() && store.data.session) {
   await game.call((a) => a.session()).catch(() => {});
 } else if (store.hasWallet() && !store.data.session) {
   await game.login().then((r) => console.log('login', r.address)).catch((e) => console.error('[login]', e.message));
+}
+
+if (Date.now() - store.cursor('bootNotice') > 3600 * 1000) {
+  store.setCursor('bootNotice', Date.now());
+  const who = store.sessionAddress();
+  bot.notify(`✅ <b>LootMarch Bot online</b>\n${who ? `Login: <code>${who}</code>\n` : 'Belum login — kirim /start.\n'}Autopilot jalan tiap ${Math.round(cfg.tickSeconds / 60)} menit. Kirim /start untuk menu.`);
 }
 
 const pilot = startAutopilot({ game, store, notify: bot.notify, tickSeconds: cfg.tickSeconds, feedSeconds: cfg.feedSeconds });

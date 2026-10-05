@@ -88,7 +88,16 @@ export class LootMarchApi {
     return data;
   }
 
-  get(p) { return this.request(p); }
+  // Reads are safe to repeat: retry brief 5xx/network blips (the game returns 502 now and then).
+  async get(p) {
+    for (let i = 0; ; i++) {
+      try { return await this.request(p); } catch (e) {
+        const transient = e instanceof ApiError && (e.status === 0 || e.status >= 500);
+        if (!transient || i >= 2) throw e;
+        await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+      }
+    }
+  }
   post(p, body = {}) { return this.request(p, { method: 'POST', body }); }
 
   // --- auth ---
@@ -120,10 +129,14 @@ export class LootMarchApi {
   unlockFloor(floor) { return this.post('/game/floor/unlock', { floor, actionId: uuid() }); }
 
   // --- hero ---
+  // `attributes` = points to add per attribute, e.g. { str: 1, vit: 0, ... }.
   setAttributes(attributes) {
     const sorted = Object.fromEntries(Object.keys(attributes).sort().map((k) => [k, attributes[k]]));
     return this.post('/game/character/attributes', { attributes: sorted, actionId: uuid() });
   }
+
+  selectClass(classId) { return this.post('/game/character/select', { classId, actionId: uuid() }); }
+  setAppearance(appearance, nick) { return this.post('/game/character/appearance', { appearance, nick, actionId: uuid() }); }
 
   // --- gear ---
   equipBest() { return this.post('/game/equipment/best', { actionId: uuid() }); }

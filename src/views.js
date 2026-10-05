@@ -2,8 +2,9 @@ import { InlineKeyboard } from 'grammy';
 import {
   CAT, RARITY_ICON, SLOT_ICON, SLOT_NAME, CLASS_ICON, itemInfo, itemLabel, itemStats, fmtStat, regionName,
   xpToNext, sealCost, SHOP_CHESTS, PET_CHESTS, petInfo, petProgress, petBonus, PET_ABILITY, ZONES_PER_FLOOR,
+  heroPower, heroStats, PET_PREFIX, CLASS_INFO, NICK_MAX,
 } from './catalog.js';
-import { BUILDS, VAM_CAP, depth } from './game.js';
+import { BUILDS, VAM_CAP, depth, resolveBuild } from './game.js';
 import { esc } from './autopilot.js';
 
 export const n = (v) => Math.round(Number(v) || 0).toLocaleString('en-US');
@@ -22,35 +23,69 @@ const back = (kb, to = 'home') => kb.row().text('⬅️ Kembali', 'nav:' + to);
 const ON = (b) => (b ? '✅' : '▫️');
 
 // ---------------------------------------------------------------- home
-export function homeView(st, { live, online, autopilot } = {}) {
+const ago = (ms) => (ms ? dur((Date.now() - ms) / 1000) + ' lalu' : 'belum');
+
+export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings } = {}) {
   const c = st.character || {};
   const pr = st.progress || {};
   const b = st.balances || {};
   const nick = c.appearance?.nick || 'Hero';
   const next = xpToNext(c.level);
   const pend = st.pendingLoot || {};
+  const eq = Object.values(st.equipped || {}).filter(Boolean).length;
+  const chests = Object.entries(st.items || {}).filter(([k, v]) => k.startsWith('chest_') && v > 0).reduce((t, [, v]) => t + v, 0)
+    + Object.values(st.petChests || {}).reduce((t, v) => t + (v || 0), 0);
   const lines = [
-    `⚔️ <b>LootMarch</b> — <b>${esc(nick)}</b>`,
+    `⚔️ <b>LootMarch</b> · <b>${esc(nick)}</b>`,
+    '━━━━━━━━━━━━━━━━━━',
+    `${CLASS_ICON[c.classId] || '🧝'} <b>${esc(c.className || c.classId || '-')}</b> Lv <b>${c.level ?? '?'}</b> · ${n(c.xp)}/${next ? n(next) : '?'} XP${c.sp ? ` · 📈 ${c.sp} SP` : ''}`,
+    `⚡ Power <b>${n(heroPower(st))}</b> · 🧥 gear ${eq}/7 · 🐾 ${st.pets?.activePet ? esc(petInfo(st.pets.activePet).name) : '—'}`,
+    `🗺 Floor <b>${pr.floor ?? 1}</b> · ${esc(regionName(pr.zone_index ?? 0))} (${(pr.zone_index ?? 0) + 1}/${ZONES_PER_FLOOR}) · terdalam ${pr.best_depth ?? 0}`,
     '',
-    `${CLASS_ICON[c.classId] || '🧝'} ${esc(c.className || c.classId || '-')} · Lv <b>${c.level ?? '?'}</b> (${n(c.xp)}/${next ? n(next) : '?'} XP)${c.sp ? ` · 📈 <b>${c.sp} SP</b>` : ''}`,
-    `🗺 Floor <b>${pr.floor ?? 1}</b> · ${esc(regionName(pr.zone_index ?? 0))} (${(pr.zone_index ?? 0) + 1}/${ZONES_PER_FLOOR}) · terdalam: ${pr.best_depth ?? 0}`,
-    `💰 <b>${n(b.LM)}</b> $LM${usd(b.LM, st)} · 🦴 ${n(b.Bone)} Bone`,
+    `💰 <b>${n(b.LM)}</b> $LM${usd(b.LM, st)}`,
+    `🦴 ${n(b.Bone)} Bone${chests ? ` · 📦 ${chests} chest` : ''}${pend.drops || pend.bone ? ` · 🎁 ${n(pend.drops)} drop menunggu` : ''}`,
   ];
-  if (pend.drops || pend.bone) lines.push(`🎁 Loot menunggu: ${n(pend.drops)} drop · ${n(pend.bone)} Bone`);
+  if (daily) {
+    const ms = daily.missions || [];
+    const done = ms.filter((m) => m.claimed).length;
+    const ready = ms.filter((m) => m.complete && !m.claimed).length;
+    lines.push(`📜 Quest ${done}/${ms.length} diklaim${ready ? ` · 🎁 ${ready} siap` : ''} · daily ${daily.board?.claimed ? '✅' : `${daily.board?.completed ?? 0}/${daily.board?.required ?? 4}`} · login ${daily.login?.claimedToday ? '✅' : '🎁'}`);
+  }
+  if (pass) lines.push(`🎫 Pass tier <b>${pass.tier}</b>/${pass.maxTier} · ${n(pass.xp - pass.tier * pass.tierXp)}/${n(pass.tierXp)} XP${pass.premium ? ' · ♛' : ''}${pass.claimable ? ' · 🎁 siap klaim' : ''}`);
   if (live) {
     if (!live.needed) lines.push('🛡 Live check: tidak diperlukan');
-    else if (live.valid && !live.held) lines.push(`🛡 Live check: ✅ aktif s/d ${dur(live.expiresAt - Date.now() / 1000)} lagi`);
-    else lines.push(`🛡 Live check: ⚠️ <b>${n(live.held)} $LM tertahan</b> — buka game di browser`);
+    else if (live.held > 0) lines.push(`🛡 Live check: ⚠️ <b>${n(live.held)} $LM tertahan</b> — buka game di browser sebentar`);
+    else if (live.valid) lines.push(`🛡 Live check: ✅ aktif ${dur(live.expiresAt - Date.now() / 1000)} lagi`);
+    else lines.push('🛡 Live check: 💤 kedaluwarsa (normal saat offline)');
   }
-  if (st.lmStatus && st.lmStatus !== 'LIVE') lines.push(`ℹ️ Status $LM: ${esc(st.lmStatus)}`);
-  lines.push('', `🤖 Autopilot: ${autopilot ? 'ON' : 'OFF'}${online ? ` · 👥 ${n(online)} online` : ''}`);
+  lines.push('━━━━━━━━━━━━━━━━━━');
+  const ap = [`🤖 Autopilot ${autopilot ? 'ON' : 'OFF'} · jalan ${ago(lastRun)}`];
+  if (settings?.autoAfk && nextAfkIn != null) ap.push(`💤 AFK ${nextAfkIn > 0 ? 'diklaim ' + dur(nextAfkIn) + ' lagi' : 'segera'}`);
+  lines.push(ap.join(' · '));
+  lines.push(`🧭 Travel ${travelIn ? dur(travelIn) + ' lagi' : 'siap'}${online ? ` · 👥 ${n(online)} online` : ''}`);
   const kb = new InlineKeyboard()
     .text('🧝 Hero', 'nav:hero').text('🎒 Inventory', 'nav:inv:0').text('🎁 Loot & AFK', 'nav:loot').row()
     .text('📜 Quest', 'nav:quest').text('🎫 Pass', 'nav:pass').text('🗺 Travel', 'nav:travel').row()
     .text('🐾 Pet', 'nav:pet').text('🛒 Shop', 'nav:shop').text('🏪 Market', 'nav:mk:all:all:0').row()
     .text('💰 Wallet', 'nav:wallet').text('📖 Codex', 'nav:codex').text('🏆 Ranks', 'nav:ranks').row()
-    .text('⚙️ Setelan', 'nav:set').text('🔄 Refresh', 'nav:home');
+    .text('🤖 Jalankan autopilot', 'auto:run').text('📋 Log', 'nav:log').row()
+    .text('⚙️ Setelan', 'nav:set').text('🔄 Refresh', 'nav:refresh');
   return { text: lines.join('\n'), kb };
+}
+
+export function logView(entries) {
+  const lines = ['📋 <b>Log aktivitas</b> (terbaru di atas)', ''];
+  if (!entries.length) lines.push('Belum ada aktivitas. Autopilot mencatat semua yang dikerjakan di sini.');
+  const fmtT = (ms) => new Date(ms).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  let used = 60;
+  for (const e of entries) {
+    const line = `<code>${fmtT(e.at)}</code> ${e.source === 'manual' ? '👆' : '🤖'} ${esc(e.text)}`;
+    if (used + line.length > 3800) break;
+    used += line.length + 1;
+    lines.push(line);
+  }
+  const kb = new InlineKeyboard().text('🔄 Refresh', 'nav:log').text('🤖 Jalankan sekarang', 'auto:run');
+  return { text: lines.join('\n'), kb: back(kb) };
 }
 
 // ---------------------------------------------------------------- hero
@@ -62,7 +97,9 @@ const ATTR_INFO = [
 export function heroView(st, settings) {
   const c = st.character || {};
   const a = c.attrs || {};
-  const lines = [`🧝 <b>${esc(c.appearance?.nick || 'Hero')}</b> · ${esc(c.className || '')} · Lv ${c.level}`, ''];
+  const hs = heroStats(st);
+  const lines = [`🧝 <b>${esc(c.appearance?.nick || 'Hero')}</b> · ${esc(c.className || '')} · Lv ${c.level} · ⚡ Power <b>${n(heroPower(st))}</b>`,
+    `❤️ ${n(hs.maxHp)} HP · ⚔️ ${n(hs.dmg)} DMG · 💥 crit ${Math.round(hs.crit * 100)}% ×${(1 + hs.critDmg).toFixed(1)} · 🛡 block ${Math.round(hs.block * 100)}% · 🩸 ${(hs.lifesteal * 100).toFixed(1)}% · 💨 ${n(hs.speed)}`, ''];
   lines.push('<b>Attribute</b>' + (c.sp ? ` — 📈 ${c.sp} poin bebas` : ''));
   for (const [k, label, eff] of ATTR_INFO) lines.push(`${label}: <b>${a[k] || 0}</b>  <i>${eff}</i>`);
   lines.push('', '<b>Gear terpasang</b>');
@@ -72,13 +109,13 @@ export function heroView(st, settings) {
   }
   const active = st.pets?.activePet;
   lines.push(`🐾 Pet: ${active ? esc(petInfo(active).name) : '—'}`);
-  lines.push('', `Build autopilot: <b>${BUILDS[settings.build]?.name || settings.build}</b>`);
+  lines.push('', `Build autopilot: <b>${BUILDS[settings.build]?.name || settings.build}</b>${settings.build === 'auto' ? ` → ${BUILDS[resolveBuild('auto', c.classId)].name}` : ''}`);
   const kb = new InlineKeyboard();
   if (c.sp) {
     ATTR_INFO.forEach(([k, label], i) => { kb.text(`+1 ${label.split(' ')[1]}`, 'hero:attr:' + k); if (i === 2) kb.row(); });
     kb.row().text(`✨ Auto-alokasi ${c.sp} SP`, 'hero:auto');
   }
-  kb.row().text('🧥 Equip best', 'hero:best').text('🏗 Ganti build', 'hero:build');
+  kb.row().text('🧥 Equip best', 'hero:best').text('🏗 Ganti build', 'hero:build').row().text('🛍 Upgrade dari Market', 'upg:plan');
   return { text: lines.join('\n'), kb: back(kb) };
 }
 
@@ -98,7 +135,7 @@ export function invView(items, page = 0) {
     if (page < pages - 1) kb.text('▶️', 'nav:inv:' + (page + 1));
     kb.row();
   }
-  kb.text('🧥 Equip best', 'hero:best').text('♻️ Salvage', 'salv:menu');
+  kb.text('🧥 Equip best', 'hero:best').text('♻️ Salvage', 'salv:menu').row().text('🛍 Upgrade dari Market', 'upg:plan');
   return { text: lines.join('\n'), kb: back(kb) };
 }
 
@@ -314,7 +351,7 @@ export function petDetail(st, petId) {
     kb.text('🦴 Feed 100', `pet:feed:${petId}:100`).text('🦴 Feed 1000', `pet:feed:${petId}:1000`).row();
     kb.text(`🦴 Ke Lv ${pg.level + 1} (${n(pg.boneToNext)})`, `pet:feed:${petId}:${pg.boneToNext}`);
   }
-  kb.row().text('🏪 Jual di Market', 'it:sell:' + petId);
+  kb.row().text('🏪 Jual di Market', 'it:sell:' + PET_PREFIX + petId);
   return { text: lines.join('\n'), kb: back(kb, 'pet') };
 }
 
@@ -443,25 +480,73 @@ export function settingsView(s, { address, session }) {
   t('autoEquip', 'Equip best'); t('autoAttr', 'Auto attribute'); kb.row();
   t('autoSalvage', `Salvage s/d ${CAT.rarities[s.salvageLevel]}`); t('autoForge', 'Auto forge'); kb.row();
   t('autoDaily', 'Quest'); t('autoPass', 'Pass'); kb.row();
-  t('autoSeal', 'Auto buka seal floor'); kb.row();
+  t('autoSeal', 'Auto seal floor'); t('autoChest', 'Buka chest'); kb.row();
+  t('autoUpgrade', `Upgrade market (${Math.round(s.upgradeShare * 100)}% $LM)`); kb.row();
   t('alertLive', 'Alert live check'); t('alertDrops', 'Alert drop global'); kb.row();
   t('reports', 'Laporan autopilot'); kb.row();
   kb.text(`⏱ AFK: ${s.afkHours}j`, 'set:afk').text(`🏗 Build: ${BUILDS[s.build]?.name}`, 'hero:build').row();
   kb.text(`♻️ Salvage: ${CAT.rarities[s.salvageLevel]}`, 'set:salv').text(`🔨 Cadangan: ${n(s.forgeReserveLm)} LM`, 'set:fres').row();
-  kb.text('🔐 Login ulang (key)', 'set:login').text('🍪 Pakai cookie', 'set:cookie').row().text('🚪 Logout game', 'set:logout');
+  kb.text('🔐 Login ulang', 'set:login').text('🚪 Logout game', 'set:logout');
   lines.push(`Forge otomatis hanya jalan kalau $LM > ${n(s.forgeReserveLm)} dan Bone > ${n(s.forgeReserveBone)}.`);
   return { text: lines.join('\n'), kb: back(kb) };
 }
 
-export function buildPicker(cur) {
+export function buildPicker(cur, classId) {
   const kb = new InlineKeyboard();
-  const lines = ['🏗 <b>Pilih build attribute</b>', ''];
+  const auto = resolveBuild('auto', classId);
+  const lines = ['🏗 <b>Pilih build attribute</b>', '', 'Semua class punya base stat & efek attribute yang sama; bedanya hanya skill senjata. Nilai 1 poin menurut rumus Power game: STR ≈13 · VIT 6,4 · DEF 5 · VAM 3,75 · AGI 1,2.', ''];
   for (const [id, b] of Object.entries(BUILDS)) {
-    lines.push(`<b>${b.name}</b>: VAM dulu s/d ${VAM_CAP} (life steal = satu-satunya heal tetap), sisanya ` + Object.entries(b.share).filter(([, v]) => v).map(([k, v]) => `${k.toUpperCase()} ${Math.round(v * 100)}%`).join(' · '));
+    const share = BUILDS[id === 'auto' ? auto : id].share;
+    const mix = Object.entries(share).filter(([, v]) => v).map(([k, v]) => `${k.toUpperCase()} ${Math.round(v * 100)}%`).join(' · ');
+    lines.push(`<b>${b.name}</b>${id === 'auto' ? ` → ${BUILDS[auto].name} untuk ${esc(classId || '?')}` : ''}: ${mix}`);
     kb.text(`${cur === id ? '✅ ' : ''}${b.name}`, 'hero:setbuild:' + id);
+    if (id === 'balanced') kb.row();
   }
+  lines.push('', `<i>Wand/Spear (jarak jauh) → Damage. Sword/Axe/Dagger (jarak dekat) → Seimbang. VAM & AGI maks ${VAM_CAP} poin.</i>`);
   return { text: lines.join('\n'), kb: back(kb, 'hero') };
 }
+
+export function upgradeView(st, plan) {
+  const lines = ['🛍 <b>Upgrade gear dari Market</b>', `Power sekarang ⚡ ${n(plan.base)} · saldo ${n(st.balances?.LM)} $LM`, ''];
+  if (!plan.picks.length) lines.push('Belum ada upgrade yang terjangkau. Kumpulkan $LM dulu atau deposit dari wallet (💰 Wallet → ⬇️ Deposit).');
+  for (const p of plan.picks) {
+    const cur = st.equipped?.[p.slot];
+    lines.push(`${SLOT_ICON[p.slot]} ${itemLabel(p.listing.itemId, { short: true })} — ${n(p.cost)} $LM (+${n(p.gain)} Power)`, `    <i>ganti: ${cur ? itemLabel(cur, { short: true }) : 'slot kosong'}</i>`);
+  }
+  if (plan.picks.length) lines.push('', `Total: <b>${n(plan.spend)} $LM</b>${usd(plan.spend, st)} → Power ⚡ ${n(plan.base)} → <b>${n(plan.base + plan.gain)}</b>`, '<i>Harga sudah termasuk fee pembeli 5%. Dipilih dengan kenaikan Power terbesar per $LM, senjata sesuai class.</i>');
+  const kb = new InlineKeyboard();
+  if (plan.picks.length) kb.text(`✅ Beli & pakai semua (${n(plan.spend)} $LM)`, 'upg:buy').row();
+  kb.text('🔄 Hitung ulang', 'upg:plan');
+  return { text: lines.join('\n'), kb: back(kb, 'hero') };
+}
+
+// ---------------------------------------------------------------- new hero
+const CLASS_ORDER = ['wand', 'spear', 'axe', 'sword', 'dagger'];
+export function newHeroClassView() {
+  const lines = ['🆕 <b>Buat hero</b> — langkah 1/3: pilih class', '', 'Semua class punya stat dasar sama; bedanya skill senjata (otomatis tiap 7 detik). Senjata terkunci ke class, <b>hero hanya dibuat sekali</b>.', ''];
+  const kb = new InlineKeyboard();
+  for (const id of CLASS_ORDER) {
+    const c = CLASS_INFO[id];
+    lines.push(`${CLASS_ICON[id]} <b>${id.toUpperCase()}</b> — ${c.skill}${id === 'wand' ? ' ⭐ rekomendasi' : ''}`, `    <i>${c.text}</i>`);
+    kb.text(`${CLASS_ICON[id]} ${id.toUpperCase()}${id === 'wand' ? ' ⭐' : ''}`, 'new:class:' + id);
+    if (id === 'spear' || id === 'sword') kb.row();
+  }
+  return { text: lines.join('\n'), kb };
+}
+
+export function newHeroLookView(d) {
+  const L = d.look;
+  const lines = ['🆕 <b>Buat hero</b> — langkah 3/3: cek & konfirmasi', '',
+    `${CLASS_ICON[d.classId]} Class: <b>${d.classId.toUpperCase()}</b> (${CLASS_INFO[d.classId].skill})`,
+    `🏷 Nama: <b>${esc(d.nick)}</b>`,
+    `🎨 Tampilan: skin ${L.skin} · wajah ${L.face} · rambut ${L.hairStyle}/${L.hairCol} · baju ${L.clothStyle}/${L.clothCol}`,
+    '', '<i>Tampilan hanya kosmetik. Setelah dibuat, class & nama tidak bisa diganti.</i>'];
+  const kb = new InlineKeyboard().text('🎲 Acak tampilan', 'new:look:rand').text('↩️ Default class', 'new:look:def').row()
+    .text('✏️ Ganti nama', 'new:nick').text('🔁 Ganti class', 'new:start').row()
+    .text('✅ Buat hero sekarang', 'new:go');
+  return { text: lines.join('\n'), kb };
+}
+export const NICK_RULE = `1–${NICK_MAX} karakter, huruf/angka/spasi/_`;
 
 export function confirmKb(token) {
   return new InlineKeyboard().text('✅ Ya, lanjut', 'cf:' + token).text('❌ Batal', 'nav:home');

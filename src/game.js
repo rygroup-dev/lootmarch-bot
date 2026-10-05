@@ -1,7 +1,7 @@
 import { LootMarchApi, ApiError } from './api.js';
 import { WalletService, LM_TOKEN } from './wallet.js';
 import { signInWithKey } from './auth.js';
-import { itemInfo, RARITY_RANK, ZONES_PER_FLOOR, chestPrice } from './catalog.js';
+import { itemInfo, RARITY_RANK, ZONES_PER_FLOOR, chestPrice, heroPower, canWear, isPetId, CAT } from './catalog.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const TRAVEL_COOLDOWN = 30 * 60;
@@ -9,33 +9,70 @@ export const SLIPPAGE = 0.03; // same 3% headroom the web client allows on $-pri
 
 export const ATTRS = ['str', 'vit', 'agi', 'def', 'vam'];
 export const VAM_CAP = 20;
-// Target share of points per build. Vampirism is filled first up to its cap on
-// builds that use it: life steal is the only steady healing between rooms.
+// Every class has the same base stats and the same attribute effects; only the
+// weapon skill differs. The game's own Power score values one point at roughly
+// STR 13 · VIT 6.4 · DEF 5 · VAM 3.75 · AGI 1.2, so STR leads every build.
+// Ranged classes (wand, spear) take fewer hits and can go harder on damage;
+// melee classes stand in the crowd and want more HP. AGI only adds boss-slam
+// dodge (capped at 50%, i.e. 20 points) and a little speed.
 export const BUILDS = {
-  balanced: { name: 'Seimbang', vamFirst: true, share: { str: 0.45, vit: 0.3, agi: 0.1, def: 0.15 } },
-  damage: { name: 'Damage', vamFirst: true, share: { str: 0.65, vit: 0.2, agi: 0.15, def: 0 } },
-  tank: { name: 'Tank', vamFirst: true, share: { str: 0.3, vit: 0.45, agi: 0, def: 0.25 } },
+  auto: { name: 'Otomatis (per class)' },
+  balanced: { name: 'Seimbang', share: { str: 0.45, vit: 0.25, vam: 0.15, def: 0.1, agi: 0.05 } },
+  damage: { name: 'Damage', share: { str: 0.6, vam: 0.15, vit: 0.15, agi: 0.1 } },
+  tank: { name: 'Tank', share: { vit: 0.4, str: 0.3, def: 0.2, vam: 0.1 } },
 };
+export const CLASS_BUILD = { wand: 'damage', spear: 'damage', sword: 'balanced', axe: 'balanced', dagger: 'balanced' };
+export const ATTR_CAP = { vam: VAM_CAP, agi: 20 };
+
+export function resolveBuild(buildId, classId) {
+  if (buildId === 'auto' || !BUILDS[buildId]?.share) return CLASS_BUILD[classId] || 'balanced';
+  return buildId;
+}
 
 // Decide where `sp` free points go. Pure, so it is easy to test.
-export function planAttributes(attrs, sp, buildId = 'balanced') {
-  const build = BUILDS[buildId] || BUILDS.balanced;
+export function planAttributes(attrs, sp, buildId = 'auto', classId = null) {
+  const build = BUILDS[resolveBuild(buildId, classId)];
   const next = { str: 0, vit: 0, agi: 0, def: 0, vam: 0, ...attrs };
   for (let i = 0; i < sp; i++) {
-    if (build.vamFirst && next.vam < VAM_CAP && next.vam < Math.ceil(totalPoints(next) / 3)) { next.vam++; continue; }
-    const spent = ATTRS.filter((a) => a !== 'vam').reduce((s, a) => s + next[a], 0) + 1;
-    let best = null; let gap = -Infinity;
+    const total = ATTRS.reduce((t, k) => t + next[k], 0) + 1;
+    let best = 'str'; let gap = -Infinity;
     for (const [a, share] of Object.entries(build.share)) {
-      if (!share) continue;
-      const g = share * spent - next[a];
+      if (!share || next[a] >= (ATTR_CAP[a] ?? Infinity)) continue;
+      const g = share * total - next[a];
       if (g > gap) { gap = g; best = a; }
     }
-    if (!best) { if (next.vam < VAM_CAP) next.vam++; else next.str++; continue; }
     next[best]++;
   }
   return next;
 }
-const totalPoints = (a) => ATTRS.reduce((s, k) => s + (a[k] || 0), 0);
+
+// The server takes the points to ADD per attribute (the web client's allocate()), not the totals.
+export function attrDelta(from, to) {
+  return Object.fromEntries(ATTRS.map((k) => [k, Math.max(0, (to[k] || 0) - (from[k] || 0))]));
+}
+
+export const MARKET_BUY_FEE = 0.05;
+
+// Best Power gain per $LM for each empty/weak slot, within budget. Greedy by
+// value: the cheapest big jumps (often an empty slot) are bought first.
+export function suggestUpgrades(st, listings, budget) {
+  const base = heroPower(st);
+  const perSlot = new Map();
+  for (const l of listings || []) {
+    if (isPetId(l.itemId) || !canWear(st, l.itemId)) continue;
+    const info = itemInfo(l.itemId);
+    const cost = Math.ceil(l.price * (1 + MARKET_BUY_FEE));
+    const gain = heroPower(st, { ...(st.equipped || {}), [info.slot]: l.itemId }) - base;
+    if (gain <= 0 || cost > budget) continue;
+    const pick = { slot: info.slot, listing: l, cost, gain, ratio: gain / cost };
+    const cur = perSlot.get(info.slot);
+    if (!cur || pick.ratio > cur.ratio || (pick.ratio === cur.ratio && pick.gain > cur.gain)) perSlot.set(info.slot, pick);
+  }
+  const picks = [...perSlot.values()].sort((a, b) => b.ratio - a.ratio);
+  const out = []; let left = budget;
+  for (const p of picks) if (p.cost <= left) { out.push(p); left -= p.cost; }
+  return { picks: out, spend: budget - left, gain: out.reduce((t, p) => t + p.gain, 0), base };
+}
 
 export function depth(floor, zoneIndex) { return (floor - 1) * ZONES_PER_FLOOR + zoneIndex + 1; }
 
@@ -54,7 +91,18 @@ export class Game {
     this.lastAt = 0;
     this.busy = Promise.resolve();
     this.reloginAt = 0;
+    this.cache = new Map(); // key -> { at, p }
   }
+
+  // Small TTL cache for slow, rarely-changing reads (the game API takes 0.5-2 s per call).
+  cached(key, ttlMs, fn) {
+    const hit = this.cache.get(key);
+    if (hit && Date.now() - hit.at < ttlMs) return hit.p;
+    const p = fn().catch((e) => { this.cache.delete(key); throw e; });
+    this.cache.set(key, { at: Date.now(), p });
+    return p;
+  }
+  forget(key) { this.cache.delete(key); }
 
   wallet() {
     const key = this.store.privateKey();
@@ -77,6 +125,16 @@ export class Game {
     const res = await signInWithKey(this.api, w, this.cfg.chainId);
     this.store.setSession(this.api.cookie, res.address);
     return res;
+  }
+
+  // No session yet but a key is stored: just sign in. Callers never deal with sessions.
+  async ensureSession() {
+    if (this.store.data.session) return true;
+    if (!this.store.hasWallet()) return false;
+    if (Date.now() - this.reloginAt < 60000) return false;
+    this.reloginAt = Date.now();
+    await this.login();
+    return true;
   }
 
   async useCookie(cookie) {
@@ -139,16 +197,25 @@ export class Game {
     if (!ATTRS.includes(attr)) throw new Error('Attribute tidak dikenal.');
     if ((c.sp || 0) < n) throw new Error('Attribute point tidak cukup.');
     if (attr === 'vam' && (c.attrs.vam || 0) + n > VAM_CAP) throw new Error(`Vampirism maksimal ${VAM_CAP} poin.`);
-    return this.act((a) => a.setAttributes({ ...c.attrs, [attr]: (c.attrs[attr] || 0) + n }));
+    return this.act((a) => a.setAttributes(attrDelta({}, { [attr]: n })));
   }
 
   async autoAttributes(buildId) {
     const st = await this.state();
     const c = st.character;
     if (!c?.sp) return null;
-    const next = planAttributes(c.attrs, c.sp, buildId);
-    await this.act((a) => a.setAttributes(next));
+    const next = planAttributes(c.attrs, c.sp, buildId, c.classId);
+    await this.act((a) => a.setAttributes(attrDelta(c.attrs, next)));
     return next;
+  }
+
+  // A fresh account has no hero yet: the web client asks for a class, then look + name.
+  needsHero(st = this.last) { return !st?.character?.classId || !st?.character?.appearance?.nick; }
+  async createHero(classId, nick, look) {
+    const st = await this.state();
+    if (!st.character?.classId || st.character.classId !== classId) await this.act((a) => a.selectClass(classId));
+    await this.act((a) => a.setAppearance(look, nick));
+    return this.state();
   }
 
   equipBest() { return this.act((a) => a.equipBest()); }
@@ -183,8 +250,8 @@ export class Game {
 
   async claimPassIfAny() {
     const p = await this.pass();
-    if (!p.claimable) return null;
-    return this.act((a) => a.claimPass());
+    const claimed = p.claimable ? await this.act((a) => a.claimPass()) : null;
+    return { pass: p, claimed };
   }
 
   // --- shop ---------------------------------------------------------------
@@ -222,11 +289,34 @@ export class Game {
   marketHistory() { return this.call((a) => a.marketHistory()); }
   marketList(itemId, price) { return this.act((a) => a.marketList(itemId, price)); }
   marketCancel(id) { return this.act((a) => a.marketCancel(id)); }
-  marketBuy(id) { return this.act((a) => a.marketBuy(id)); }
+  marketBuy(id) { this.forget('market:all'); return this.act((a) => a.marketBuy(id)); }
+
+  async upgradePlan(budget) {
+    const [st, { listings }] = await Promise.all([this.state(20000), this.cached('market:all', 30000, () => this.market({}))]);
+    return suggestUpgrades(st, listings, Math.min(budget ?? Infinity, st.balances?.LM || 0));
+  }
+
+  // Buy each pick and wear it. Stops at the first failure (sold out, price moved).
+  async buyUpgrades(picks) {
+    const done = []; const failed = [];
+    for (const p of picks) {
+      try {
+        await this.marketBuy(p.listing.id);
+        await this.equip(p.listing.itemId).catch(() => {});
+        done.push(p);
+      } catch (e) { failed.push({ ...p, error: e.message }); }
+    }
+    return { done, failed };
+  }
 
   // --- chain: deposit / withdraw / ETH payments ---------------------------
-  depositInfo() { return this.call((a) => a.depositInfo()); }
-  withdrawInfo() { return this.call((a) => a.withdrawInfo()); }
+  depositInfo() { return this.cached('deposit', 10 * 60000, () => this.call((a) => a.depositInfo())); }
+  withdrawInfo(fresh = false) {
+    if (fresh) this.forget('withdraw');
+    return this.cached('withdraw', 60000, () => this.call((a) => a.withdrawInfo()));
+  }
+  live(ttl = 60000) { return this.cached('live', ttl, () => this.call((a) => a.live())); }
+  online() { return this.cached('feed', 60000, () => this.api.feed(0)).then((f) => f.online).catch(() => null); }
 
   async walletBalances() {
     const w = this.wallet();
@@ -234,7 +324,7 @@ export class Game {
     if (!addr) throw new Error('Wallet belum di-set.');
     let token = LM_TOKEN;
     try { token = (await this.depositInfo()).token || LM_TOKEN; } catch { /* use fallback */ }
-    return { address: addr, token, ...(await w.balances(token, addr)) };
+    return this.cached('bal:' + addr, 15000, async () => ({ address: addr, token, ...(await w.balances(token, addr)) }));
   }
 
   async pollUntilCredited(fn, tries, onTick) {
@@ -258,6 +348,7 @@ export class Game {
     const tx = await w.sendToken(info.token, info.treasury, amount, info.decimals ?? 18);
     onStep('tunggu', tx.hash);
     await w.wait(tx);
+    this.cache.clear();
     onStep('kredit', tx.hash);
     const res = await this.pollUntilCredited((a) => a.depositClaim(tx.hash), 60);
     return { hash: tx.hash, res };
@@ -266,7 +357,7 @@ export class Game {
   depositClaim(txHash) { return this.pollUntilCredited((a) => a.depositClaim(txHash), 20); }
 
   async withdraw(amount) {
-    const info = await this.withdrawInfo();
+    const info = await this.withdrawInfo(true);
     const n = Number(amount);
     if (!info.open) throw new Error('Withdraw belum dibuka oleh game.');
     if (!Number.isInteger(n)) throw new Error('Jumlah withdraw harus bilangan bulat.');
@@ -275,7 +366,9 @@ export class Game {
     if ((info.held ?? 0) < info.holdMin) throw new Error(`Wallet harus memegang minimal ${info.holdMin.toLocaleString('en-US')} $LM on-chain.`);
     const st = await this.state();
     if ((st.balances?.LM || 0) < n) throw new Error('Saldo $LM di game tidak cukup.');
-    return this.act((a) => a.withdraw(n));
+    const res = await this.act((a) => a.withdraw(n));
+    this.forget('withdraw');
+    return res;
   }
 
   // product: chest id, pet chest, or "march_pass"
@@ -291,6 +384,7 @@ export class Game {
   }
 
   async send(kind, to, amount) {
+    this.cache.clear();
     const w = this.wallet();
     if (kind === 'eth') return w.sendEth(to, amount);
     let token = LM_TOKEN;
