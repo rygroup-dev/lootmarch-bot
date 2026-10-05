@@ -23,6 +23,9 @@ const back = (kb, to = 'home') => kb.row().text('⬅️ Kembali', 'nav:' + to);
 const ON = (b) => (b ? '✅' : '▫️');
 
 // ---------------------------------------------------------------- home
+export const GAME_URL = 'https://lootmarch.xyz/play';
+export const METAMASK_DAPP_URL = 'https://metamask.app.link/dapp/lootmarch.xyz/play';
+
 const ago = (ms) => (ms ? dur((Date.now() - ms) / 1000) + ' lalu' : 'belum');
 
 export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings, desktopUrl, prog } = {}) {
@@ -72,6 +75,8 @@ export function homeView(st, { live, online, autopilot, daily, pass, lastRun, ne
     .text('🤖 Jalankan autopilot', 'auto:run').text('📋 Log', 'nav:log').row()
     .text('⚙️ Setelan', 'nav:set').text('🔄 Refresh', 'nav:refresh');
   if (desktopUrl) kb.row().url('🖥 Buka layar game (VPS)', desktopUrl);
+  // play in a phone browser that has a wallet: plain link, or MetaMask's in-app browser
+  kb.row().url('🎮 Main di browser', GAME_URL).url('🦊 Buka di MetaMask', METAMASK_DAPP_URL);
   return { text: lines.join('\n'), kb };
 }
 

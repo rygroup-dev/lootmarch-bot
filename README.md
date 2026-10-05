@@ -4,15 +4,30 @@ Panel kontrol Telegram untuk **satu akun** [LootMarch](https://lootmarch.xyz), g
 
 ## Pasang (satu baris)
 
-### Linux / VPS (disarankan, jalan 24 jam)
+| Perangkat | Perintah | Jalan 24 jam? |
+|---|---|---|
+| 📱 HP Android (Termux) | `curl -fsSL https://raw.githubusercontent.com/rygroup-dev/lootmarch-bot/main/install.sh \| bash` | Ya, selama HP menyala |
+| 🖥 VPS / Linux | perintah yang sama | Ya (+ opsi layar game 24 jam) |
+| 🪟 Windows 10/11 | `irm https://raw.githubusercontent.com/rygroup-dev/lootmarch-bot/main/install.ps1 \| iex` | Selama PC menyala |
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/rygroup-dev/lootmarch-bot/main/install.sh | bash
-```
+### 📱 HP Android (Termux)
+
+1. Pasang **Termux** dari [F-Droid](https://f-droid.org/packages/com.termux/) (versi Play Store sudah usang).
+2. Buka Termux, tempel perintah di atas. Installer mendeteksi Termux otomatis, memasang `git` + `nodejs-lts`, lalu menjalankan bot di latar belakang dengan *wake lock*.
+3. Settings → Apps → Termux → Battery → **Unrestricted**, supaya Android tidak mematikan bot.
+4. (Opsional) Pasang **Termux:Boot** dari F-Droid dan buka sekali → bot ikut menyala setelah HP restart.
+
+Kelola: `~/lootmarch-bot/scripts/termux.sh status|log|stop|restart`.
+
+Main online dari HP: tombol **🎮 Main di browser** atau **🦊 Buka di MetaMask** di dashboard Telegram membuka game di Kiwi/Brave (dengan ekstensi wallet) atau di browser bawaan MetaMask.
+
+### 🖥 VPS / Linux
 
 Installer memasang `git`, `curl`, dan Node.js 22 kalau belum ada, clone ke `~/lootmarch-bot`, menanyakan **BOT_TOKEN** dan **ID Telegram**, membuat `SECRET_KEY` acak, lalu menjalankan bot sebagai service systemd `lootmarch-bot`.
 
-### Windows 10/11
+**Layar game 24 jam (opsional, ditanya saat install):** memasang Chromium di layar virtual VPS + noVNC lewat HTTPS dengan password, jadi game bisa jalan terus tanpa PC. Buka linknya sekali dari browser mana pun, pasang Rabby/MetaMask di Chromium itu, login ke `lootmarch.xyz/play`, lalu tinggal. Saat game minta centang "Verify you are human", bot mengirim alert + link layar; kamu yang mencentang. Butuh ±1 core & 1,5 GB RAM. Mau pasang belakangan: `LM_DESKTOP=1` lalu jalankan installer lagi. Punya sertifikat domain sendiri: set `LM_CERT` & `LM_KEY` (default self-signed).
+
+### 🪟 Windows 10/11
 
 Buka **PowerShell** (tidak perlu Administrator), lalu tempel:
 
@@ -92,7 +107,7 @@ Hadiah AFK = **75% dari rate online kamu sendiri** (24 jam terakhir), maksimal 8
 ```bash
 npm install
 cp .env.example .env   # isi BOT_TOKEN, OWNER_IDS, SECRET_KEY
-npm test               # 41 tes, tanpa jaringan
+npm test               # 45 tes, tanpa jaringan
 npm start
 ```
 
