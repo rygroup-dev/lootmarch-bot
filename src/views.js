@@ -498,7 +498,9 @@ export function settingsView(s, { address, session }) {
   t('reports', 'Laporan autopilot'); kb.row();
   kb.text(`⏱ AFK: ${s.afkHours}j`, 'set:afk').text(`🏗 Build: ${BUILDS[s.build]?.name}`, 'hero:build').row();
   kb.text(`♻️ Salvage: ${CAT.rarities[s.salvageLevel]}`, 'set:salv').text(`🔨 Cadangan: ${n(s.forgeReserveLm)} LM`, 'set:fres').row();
+  kb.text(`🔨 Budget forge/hari: ${n(s.forgeDailyLm)} LM`, 'set:fday').row();
   kb.text('🔐 Login ulang', 'set:login').text('🚪 Logout game', 'set:logout');
+  lines.push(`Forge maksimal ${n(s.forgeDailyLm)} $LM per hari (termasuk beli Bone).`);
   lines.push(`Forge & feed pet hanya untuk epic ke atas (legendary ke atas kalau 7 slot sudah legendary), dan hanya kalau $LM > ${n(s.forgeReserveLm)} dan Bone > ${n(s.forgeReserveBone)}.`);
   return { text: lines.join('\n'), kb: back(kb) };
 }

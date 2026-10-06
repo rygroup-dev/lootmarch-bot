@@ -277,14 +277,22 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
 
   await step('Forge', async () => {
     if (!s.autoForge) return;
+    // Daily budget: forge costs climb steeply (+1 ≈ 50 $LM, +13 ≈ 930 $LM + 490 Bone), so cap
+    // what forging (incl. Bone bought for it) may spend per UTC day.
+    const day = new Date(now).toISOString().slice(0, 10);
+    const spent = store.cursor('forgeSpent', {})[day] || 0;
+    const budget = Math.max(0, (s.forgeDailyLm || 0) - spent);
+    const spend = (lm) => store.setCursor('forgeSpent', { [day]: (store.cursor('forgeSpent', {})[day] || 0) + lm });
+    if (budget <= 0) return;
     // Bone is cheap in the shop (a pack is priced in $, ~2 $LM per Bone at times): top it up for forging.
     const pack = st.prices?.bonePack;
     const want = s.forgeReserveBone + 2000;
     if (s.autoBuyBone && pack?.lm && (st.balances?.Bone || 0) < s.forgeReserveBone + 500 && forgeTarget(st.equipped || {}, forgeFloor(st.equipped || {}))) {
       const packs = Math.min(15, Math.ceil((want - (st.balances?.Bone || 0)) / pack.bone));
       const cost = packs * pack.lm;
-      if (packs > 0 && (st.balances?.LM || 0) - cost > s.forgeReserveLm + 2000) {
+      if (packs > 0 && cost <= budget && (st.balances?.LM || 0) - cost > s.forgeReserveLm + 2000) {
         await game.buyBone(packs);
+        spend(cost);
         st = game.last || st;
         log.push(`🦴 Beli ${packs} Bone pack (+${fmt(packs * pack.bone)} Bone, −${fmt(cost)} $LM) untuk forge.`);
       }
@@ -297,6 +305,7 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
       const lm = st.balances?.LM || 0;
       const bone = st.balances?.Bone || 0;
       if (lm - last.lm * 1.25 < s.forgeReserveLm || bone - last.bone * 1.25 < s.forgeReserveBone) break;
+      if ((store.cursor('forgeSpent', {})[day] || 0) + last.lm > s.forgeDailyLm) break; // daily budget
       const target = forgeTarget(st.equipped || {}, forgeFloor(st.equipped || {}));
       if (!target) break;
       // the first failure is reported; later ones just mean materials ran out
@@ -307,6 +316,7 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
         break;
       }
       if (res?.cost) { last = { lm: res.cost.lm || last.lm, bone: res.cost.bone || last.bone }; store.setCursor('forgeCost', last); }
+      spend(res?.cost?.lm || last.lm);
       st = game.last || st; done++;
     }
     if (done) log.push(`🔨 Forge ${done}×: ${Object.values(st.equipped || {}).filter((id) => itemInfo(id).plus && (RARITY_RANK[itemInfo(id).rarity] ?? 0) >= forgeFloor(st.equipped || {})).map((id) => itemLabel(id, { short: true })).join(', ')}`);

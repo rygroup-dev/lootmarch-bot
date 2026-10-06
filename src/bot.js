@@ -543,6 +543,7 @@ export function createBot({ cfg, store, game, autopilot }) {
     store.setSetting('salvageLevel', (store.settings.salvageLevel + 1) % 3);
     await show(ctx, V.settingsView(store.settings, { address: store.walletAddress(), session: store.sessionAddress() }));
   }));
+  bot.callbackQuery('set:fday', h(async (ctx) => ask(ctx, 'fday', '🔨 Ketik budget forge per hari dalam $LM (termasuk beli Bone), contoh <code>10000</code>. 0 = forge berhenti.')));
   bot.callbackQuery('set:fres', h(async (ctx) => ask(ctx, 'fres', '🔨 Ketik cadangan $LM minimum untuk auto forge (contoh <code>5000</code>).')));
   bot.callbackQuery('set:login', h(async (ctx) => {
     await toast(ctx, '🔐 Login…');
@@ -624,6 +625,11 @@ export function createBot({ cfg, store, game, autopilot }) {
           await game.marketList(p.data.id, price);
           await show(c, V.myListingsView(game.last));
         });
+      }
+      case 'fday': {
+        const v = Math.max(0, Math.round(Number(parseAmount(text))));
+        store.setSetting('forgeDailyLm', v);
+        return say(ctx, `✅ Budget forge: ${V.n(v)} $LM per hari`);
       }
       case 'fres': {
         const v = Math.round(Number(parseAmount(text)));

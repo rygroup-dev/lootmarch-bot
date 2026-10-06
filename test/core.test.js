@@ -596,3 +596,18 @@ test('forge tops up Bone from the shop when low, keeping the $LM reserve', async
   await runRound(t.game, t.store);
   assert.ok(!t.srv.calls.some((c) => c.path === '/game/shop/bone'));
 });
+
+test('forge respects the daily $LM budget', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  store.setSetting('autoForge', true);
+  store.setSetting('forgeDailyLm', 2500);
+  srv.state.equipped = { weapon: 'crystal_dirk@2' };
+  srv.state.balances.LM = 50000; srv.state.balances.Bone = 5000;
+  await runRound(game, store);
+  const forges = srv.calls.filter((c) => c.path === '/game/forge').length;
+  assert.ok(forges >= 1 && forges <= 3, String(forges)); // fake forge costs 1,000 $LM each
+  store.setCursor('lootAt', 0);
+  await runRound(game, store);
+  assert.equal(srv.calls.filter((c) => c.path === '/game/forge').length, forges, 'budget used up for today');
+});

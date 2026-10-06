@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   autoForge: false,       // spends $LM + Bone, so it is opt-in; epic+ gear only (legendary+ once all slots are)
   autoBuyBone: true,       // buy Bone packs for forging when Bone runs low (keeps the $LM reserve)
   autoFeedPet: false,     // level the active pet with Bone, epic+ pets only
+  forgeDailyLm: 10000,    // max $LM per UTC day for forging + the Bone bought for it
   forgeReserveLm: 5000,   // never forge/feed below this much $LM
   forgeReserveBone: 1000, // ...or this much Bone (kept for floor seals)
   autoDaily: true,        // claim finished missions, daily board and login streak
