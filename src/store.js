@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS = {
   autoTravel: true,       // walk the hero onto a newly opened floor
   autoSeal: true,         // break the next floor seal once the floor is cleared and it is affordable
   autoForge: false,       // spends $LM + Bone, so it is opt-in; epic+ gear only (legendary+ once all slots are)
+  autoBuyBone: true,       // buy Bone packs for forging when Bone runs low (keeps the $LM reserve)
   autoFeedPet: false,     // level the active pet with Bone, epic+ pets only
   forgeReserveLm: 5000,   // never forge/feed below this much $LM
   forgeReserveBone: 1000, // ...or this much Bone (kept for floor seals)

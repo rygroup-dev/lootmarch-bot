@@ -488,7 +488,7 @@ export function settingsView(s, { address, session }) {
   t('autoAfk', `AFK tiap ${s.afkHours}j`); t('autoLoot', 'Klaim loot'); kb.row();
   t('autoEquip', 'Equip best'); t('autoAttr', 'Auto attribute'); kb.row();
   t('autoSalvage', `Salvage s/d ${CAT.rarities[s.salvageLevel]}`); t('autoForge', 'Auto forge (epic+)'); kb.row();
-  t('autoFeedPet', 'Feed pet (epic+)'); kb.row();
+  t('autoFeedPet', 'Feed pet (epic+)'); t('autoBuyBone', 'Beli Bone utk forge'); kb.row();
   t('autoDaily', 'Quest'); t('autoPass', 'Pass'); kb.row();
   t('autoSeal', 'Auto seal floor'); t('autoTravel', 'Travel floor baru'); kb.row();
   t('autoChest', 'Buka chest'); t('autoSell', 'Jual gear sisa'); kb.row();

@@ -277,22 +277,37 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
 
   await step('Forge', async () => {
     if (!s.autoForge) return;
+    // Bone is cheap in the shop (a pack is priced in $, ~2 $LM per Bone at times): top it up for forging.
+    const pack = st.prices?.bonePack;
+    const want = s.forgeReserveBone + 2000;
+    if (s.autoBuyBone && pack?.lm && (st.balances?.Bone || 0) < s.forgeReserveBone + 500 && forgeTarget(st.equipped || {}, forgeFloor(st.equipped || {}))) {
+      const packs = Math.min(15, Math.ceil((want - (st.balances?.Bone || 0)) / pack.bone));
+      const cost = packs * pack.lm;
+      if (packs > 0 && (st.balances?.LM || 0) - cost > s.forgeReserveLm + 2000) {
+        await game.buyBone(packs);
+        st = game.last || st;
+        log.push(`🦴 Beli ${packs} Bone pack (+${fmt(packs * pack.bone)} Bone, −${fmt(cost)} $LM) untuk forge.`);
+      }
+    }
     let done = 0;
-    for (let i = 0; i < 20; i++) { // +1 costs ~50 $LM + 45 Bone (verified), growing per level
+    // The server answers each forge with its cost; the next step (same or a bit
+    // more) must fit above the reserves, so they are never crossed.
+    let last = store.cursor('forgeCost', { lm: 60, bone: 50 });
+    for (let i = 0; i < 20; i++) {
       const lm = st.balances?.LM || 0;
       const bone = st.balances?.Bone || 0;
-      if (lm <= s.forgeReserveLm || bone <= s.forgeReserveBone) break;
+      if (lm - last.lm * 1.25 < s.forgeReserveLm || bone - last.bone * 1.25 < s.forgeReserveBone) break;
       const target = forgeTarget(st.equipped || {}, forgeFloor(st.equipped || {}));
       if (!target) break;
       // the first failure is reported; later ones just mean materials ran out
-      try { await game.forge(target, 1); } catch (e) {
+      let res;
+      try { res = await game.forge(target, 1); } catch (e) {
         if (/not enough|insufficient/i.test(e.message)) break; // out of Bone/$LM: normal, wait for more
         if (!done) throw e;
         break;
       }
-      const after = game.last || st;
-      if ((after.balances?.LM || 0) < s.forgeReserveLm || (after.balances?.Bone || 0) < s.forgeReserveBone) { st = after; done++; break; }
-      st = after; done++;
+      if (res?.cost) { last = { lm: res.cost.lm || last.lm, bone: res.cost.bone || last.bone }; store.setCursor('forgeCost', last); }
+      st = game.last || st; done++;
     }
     if (done) log.push(`🔨 Forge ${done}×: ${Object.values(st.equipped || {}).filter((id) => itemInfo(id).plus && (RARITY_RANK[itemInfo(id).rarity] ?? 0) >= forgeFloor(st.equipped || {})).map((id) => itemLabel(id, { short: true })).join(', ')}`);
   });

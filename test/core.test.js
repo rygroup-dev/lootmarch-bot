@@ -578,3 +578,21 @@ test('sell quote: uses recent sales, ignores bait listings, never under salvage 
   q = sellQuote('steel_sabre@10', [L('steel_sabre', 2000)], [L('steel_sabre@12', 6000)]);
   assert.ok(q.price > 2000, String(q.price));
 });
+
+test('forge tops up Bone from the shop when low, keeping the $LM reserve', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  store.setSetting('autoForge', true);
+  srv.state.equipped = { weapon: 'crystal_dirk@2' };
+  srv.state.balances.Bone = 200; srv.state.balances.LM = 20000; // AFK, loot and salvage add a few hundred first
+  const { log } = await runRound(game, store);
+  const buy = srv.calls.find((c) => c.path === '/game/shop/bone');
+  assert.ok(buy && buy.body.packs >= 1 && buy.body.packs <= 15);
+  assert.ok(log.some((l) => l.includes('Bone pack')));
+  assert.ok(srv.state.balances.LM >= store.settings.forgeReserveLm);
+  // poor: no purchase
+  const t = setup(); await t.game.login(); t.store.setSetting('autoForge', true);
+  t.srv.state.equipped = { weapon: 'crystal_dirk@2' }; t.srv.state.balances.Bone = 100; t.srv.state.balances.LM = 6000;
+  await runRound(t.game, t.store);
+  assert.ok(!t.srv.calls.some((c) => c.path === '/game/shop/bone'));
+});

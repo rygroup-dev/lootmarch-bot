@@ -130,9 +130,10 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       case '/game/forge': {
         srv.state.balances.LM -= 1000; srv.state.balances.Bone -= 100;
         const id = body.itemId; const [b, p = '0'] = id.split('@'); const nid = `${b}@${+p + body.steps}`;
-        delete srv.state.items[id]; srv.state.items[nid] = 1;
+        delete srv.state.items[id];
         for (const [k, v] of Object.entries(srv.state.equipped)) if (v === id) srv.state.equipped[k] = nid;
-        return wrap();
+        if (!Object.values(srv.state.equipped).includes(nid)) srv.state.items[nid] = 1;
+        return wrap({ level: +p + body.steps, cost: { lm: 1000, bone: 100 }, itemId: nid });
       }
       case '/game/run/travel': Object.assign(srv.state.progress, { floor: body.floor, zone_index: body.zoneIndex, floor_travel_at: Math.floor(Date.now() / 1000) }); return wrap({ runId: 'r2' });
       case '/game/floor/unlock': srv.state.balances.LM -= 3000; srv.state.balances.Bone -= 800; srv.state.progress.floor_unlocked = body.floor; return wrap();
@@ -158,6 +159,11 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       case '/game/pet-chest/open':
         srv.state.petChests[body.chestType]--; srv.state.pets.owned.push({ petId: 'shellby:rare', xp: 0 });
         return wrap({ petId: 'shellby:rare' });
+      case '/game/shop/bone': {
+        const cost = body.packs * srv.state.prices.bonePack.lm;
+        if (cost > body.maxPrice) return json(400, { error: 'Price', message: 'Price moved.' });
+        srv.state.balances.LM -= cost; srv.state.balances.Bone += body.packs * srv.state.prices.bonePack.bone; return wrap();
+      }
       case '/game/withdraw':
         if ((init.method || 'GET') === 'GET') return json(200, { min: 10000, max: 5000000, open: true, holdMin: 1000, perDay: 1, usedToday: 0, held: 5000, requests: [] });
         srv.state.balances.LM -= body.amount; return wrap({ request: { amount: body.amount } });
