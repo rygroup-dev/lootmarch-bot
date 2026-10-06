@@ -92,20 +92,21 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     const pre = await game.afkPreview();
     store.setCursor('afkAt', now);
     if (!pre?.seconds || pre.seconds < 300) return;
-    const res = await game.afkClaim();
-    const r = res.rewards || pre.rewards || {};
-    log.push(`💤 AFK ${Math.round(pre.seconds / 60)} mnt: +${fmt(r.lm)} $LM · +${fmt(r.xp)} XP · +${fmt(r.bone)} Bone${r.items?.length ? ` · ${r.items.length} item` : ''}`);
+    const before = st;
+    await game.afkClaim();
     st = game.last || st;
+    log.push(`💤 AFK ${Math.round(pre.seconds / 60)} mnt: ${gainText(before, st) || 'tidak ada hadiah'}`);
   });
 
   await step('Loot', async () => {
     if (!s.autoLoot) return;
     const p = st.pendingLoot || {};
     if (!(p.drops > 0 || p.bone > 0 || p.items?.length)) return;
+    const before = st;
     const res = await game.lootClaim();
     newGear = res.claimed?.items || 0;
-    log.push(`🎁 Loot diklaim: +${fmt(res.claimed?.bone)} Bone${newGear ? ` · ${newGear} item` : ''}`);
     st = game.last || st;
+    log.push(`🎁 Loot diklaim: ${gainText(before, st) || '+' + fmt(res.claimed?.bone) + ' Bone'}`);
   });
 
   await step('Chest', async () => {
@@ -341,8 +342,10 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   await step('Quest', async () => {
     if (!s.autoDaily || now - store.cursor('dailyAt') < 0.25 * H) return;
     store.setCursor('dailyAt', now);
+    const before = game.last || st;
     const got = await game.claimDailyAll();
-    if (got.length) log.push('📜 Quest diklaim: ' + got.join(', '));
+    st = game.last || st;
+    if (got.length) log.push(`📜 Quest diklaim: ${got.join(', ')} → ${gainText(before, st) || 'hadiah masuk'}`);
   });
 
   // Daily nudge for "Share your run" (5,000 $LM). Posting stays a human tap.
@@ -371,8 +374,10 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   await step('Pass', async () => {
     if (!s.autoPass || now - store.cursor('passAt') < 0.5 * H) return;
     store.setCursor('passAt', now);
+    const before = game.last || st;
     const { pass: p, claimed } = await game.claimPassIfAny();
-    if (claimed) log.push('🎫 Hadiah March Pass diklaim.');
+    st = game.last || st;
+    if (claimed) log.push(`🎫 Hadiah March Pass diklaim: ${gainText(before, st) || 'hadiah masuk'}`);
     // Premium can be bought late: reached tiers pay out at once. Remind when it is time.
     const sid = p.season?.id;
     const endsIn = (p.season?.end || 0) - now / 1000;
@@ -455,6 +460,37 @@ export function sellQuote(id, listings, sales = [], boneLm = 4.4) {
   return { price, cheapest, lastSold, floor };
 }
 export const sellPrice = (id, listings, sales = [], boneLm) => sellQuote(id, listings, sales, boneLm).price;
+
+// What a claim actually brought in, read from the server state before/after:
+// gear (by name + rarity), chests, pet chests, pets, $LM, Bone, XP and level-ups.
+export function gainText(before, after) {
+  if (!before || !after) return '';
+  const parts = [];
+  const db = (k) => (after.balances?.[k] || 0) - (before.balances?.[k] || 0);
+  if (db('LM') > 0) parts.push(`+${fmt(db('LM'))} $LM`);
+  if (db('Bone') > 0) parts.push(`+${fmt(db('Bone'))} Bone`);
+  if (db('XP') > 0) parts.push(`+${fmt(db('XP'))} XP`);
+  const lv0 = before.character?.level; const lv1 = after.character?.level;
+  if (lv0 && lv1 > lv0) parts.push(`⬆️ Lv ${lv1}`);
+  const have = (st) => { const m = {}; for (const [id, q] of Object.entries(st.items || {})) m[id] = (m[id] || 0) + (q || 0); for (const id of Object.values(st.equipped || {})) if (id) m[id] = (m[id] || 0) + 1; return m; };
+  const h0 = have(before); const h1 = have(after);
+  const gear = []; const chests = [];
+  for (const [id, q] of Object.entries(h1)) {
+    const d = q - (h0[id] || 0);
+    if (d <= 0) continue;
+    const info = itemInfo(id);
+    (info.kind === 'chest' ? chests : gear).push(itemLabel(id, { qty: d, short: true }));
+  }
+  if (gear.length) parts.push('gear: ' + gear.join(', '));
+  if (chests.length) parts.push('📦 ' + chests.join(', '));
+  for (const [t, q] of Object.entries(after.petChests || {})) {
+    const d = (q || 0) - (before.petChests?.[t] || 0);
+    if (d > 0) parts.push(`🐾 ${CAT.petChests[t]?.name || t + ' pet chest'} ×${d}`);
+  }
+  const pets0 = new Set((before.pets?.owned || []).map((p) => p.petId));
+  for (const p of after.pets?.owned || []) if (!pets0.has(p.petId)) parts.push(`🐾 pet baru: ${petInfo(p.petId).name}`);
+  return parts.join(' · ');
+}
 
 // Pull item / pet ids out of a chest-open response, whatever shape it has.
 export function revealed(r) {

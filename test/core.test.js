@@ -621,3 +621,15 @@ test('feed announcements: floor seals are not mistaken for item drops', async ()
   assert.match(drop, /Drop kamu!.*Nightshade Stiletto.*legendary.*dari dungeon/);
   assert.match(feedText({ itemId: 'nightshade_stiletto', rarity: 'legendary', source: 'chest', name: 'x' }, false), /dari chest/);
 });
+
+test('claim reports name what came in: gear, chests, pet chests, pets, currencies, level', async () => {
+  const { gainText } = await import('../src/autopilot.js');
+  const a = makeState();
+  const b = structuredClone(a);
+  b.balances.LM += 500; b.balances.Bone += 40; b.balances.XP += 300; b.character.level += 1;
+  b.items.frost_glaive = 1; b.items.chest_rare = 2; b.petChests.epic = 1;
+  b.pets.owned.push({ petId: 'shellby:rare', xp: 0 });
+  const t = gainText(a, b);
+  for (const want of ['+500 $LM', '+40 Bone', '+300 XP', 'Lv 4', 'Frost Glaive', 'Rare Chest', 'Epic Pet Chest', 'pet baru', 'Shellby']) assert.ok(t.includes(want), want + ' missing in: ' + t);
+  assert.equal(gainText(a, structuredClone(a)), '');
+});
