@@ -553,3 +553,28 @@ test('hold below the dungeon minimum raises one alert', async () => {
   const b = await runRound(game, store);
   assert.ok(!b.log.some((l) => l.includes('Hold kurang')), 'same check, no repeat');
 });
+
+test('sell quote: uses recent sales, ignores bait listings, never under salvage value', async () => {
+  const { sellQuote } = await import('../src/autopilot.js');
+  const L = (itemId, price) => ({ itemId, price });
+  // bait listing at 50 among ~2,000 listings/sales is ignored
+  let q = sellQuote('steel_sabre', [L('steel_sabre', 50), L('steel_sabre', 2100), L('steel_sabre', 2300)], [L('steel_sabre', 2000)]);
+  assert.equal(q.price, 2099);
+  // only a lone bait listing, but sales say ~2,000 -> follow the sales
+  q = sellQuote('steel_sabre', [L('steel_sabre', 300)], [L('steel_sabre', 2000), L('steel_sabre', 1900)]);
+  assert.equal(q.price, 1999);
+  // no listing, only sales of the same item
+  q = sellQuote('steel_sabre', [], [L('steel_sabre', 1500)]);
+  assert.equal(q.price, 1499);
+  // cheap market: never below salvage value (rare 200 Bone)
+  q = sellQuote('steel_sabre', [L('steel_sabre', 400)], []);
+  assert.equal(q.price, q.floor);
+  assert.ok(q.floor >= 200 * 4.4);
+  // real market for an epic: two honest listings ~1.4k, a sale at 1.2k and sky-high asks
+  q = sellQuote('runed_broadsword', [1420, 1550, 10000, 6000, 7500, 10000, 50000, 30000].map((p) => L('runed_broadsword', p)), [L('runed_broadsword', 1204)]);
+  assert.equal(q.cheapest, 1420, 'high asks must not turn honest listings into bait');
+  assert.equal(q.price, q.floor, 'and we still never sell under salvage value');
+  // forged copy priced from the nearest + level of listings or sales
+  q = sellQuote('steel_sabre@10', [L('steel_sabre', 2000)], [L('steel_sabre@12', 6000)]);
+  assert.ok(q.price > 2000, String(q.price));
+});

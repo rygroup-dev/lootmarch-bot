@@ -204,20 +204,27 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
       .filter(([id, q]) => q > 0 && itemInfo(id).kind === 'gear' && (RARITY_RANK[itemInfo(id).rarity] ?? 0) > s.salvageLevel)
       .sort((x, y) => (RARITY_RANK[itemInfo(y[0]).rarity] ?? 0) - (RARITY_RANK[itemInfo(x[0]).rarity] ?? 0));
     if (!spare.length) return;
-    const { listings } = await game.cached('market:all', 30000, () => game.market({}));
+    const [{ listings }, hist] = await Promise.all([
+      game.cached('market:all', 30000, () => game.market({})),
+      game.cached('market:hist', 5 * 60000, () => game.marketHistory()).catch(() => ({ recent: [] })),
+    ]);
+    const sales = hist.recent || [];
     const listed = []; const salvaged = [];
     for (const [id, q] of spare) {
       const free = 5 - (st.market || []).length;
       const rareUp = (RARITY_RANK[itemInfo(id).rarity] ?? 0) >= RARITY_RANK.rare;
-      const price = sellPrice(id, listings);
+      const quote = sellQuote(id, listings, sales);
+      const price = quote.price;
       if (price && (rareUp ? free > 0 : free > 1)) {
         await game.marketList(id, price);
         st = game.last || st;
-        listed.push(`${itemLabel(id, { short: true })} @ ${fmt(price)}`);
+        const why = [quote.cheapest && `termurah ${fmt(quote.cheapest)}`, quote.lastSold && `laku terakhir ${fmt(quote.lastSold)}`, price === quote.floor && 'batas salvage'].filter(Boolean).join(' · ');
+        listed.push(`${itemLabel(id, { short: true })} @ ${fmt(price)}${why ? ` (${why})` : ''}`);
       } else if (!rareUp && s.autoSalvage) {
-        for (let i = 0; i < Math.min(q, 5); i++) await game.salvageOne(id);
+        const n = Math.min(Number(q) || 0, 5);
+        for (let i = 0; i < n; i++) await game.salvageOne(id);
         st = game.last || st;
-        salvaged.push(itemLabel(id, { short: true }));
+        if (n) salvaged.push(itemLabel(id, { short: true }));
       }
     }
     snapshot();
@@ -390,24 +397,38 @@ export function progressStats(list, now = Date.now()) {
 // same base item; never below what salvaging it would give.
 export const SALVAGE_LEVELS = ['common', 'uncommon', 'rare'];
 const SALVAGE_BONE = { common: 30, uncommon: 80, rare: 200, epic: 500, legendary: 1200, mythic: 3000 };
-export function sellPrice(id, listings, boneLm = 4.4) {
+// Price a spare for a quick sale without giving it away:
+//  - references: live listings AND recent sales of the same item (same + level);
+//    if there are none, the closest + level of the same item scaled by forge growth
+//  - bait prices under half the going rate are ignored
+//  - one under the cheapest believable listing, never under salvage value
+export function sellQuote(id, listings, sales = [], boneLm = 4.4) {
   const info = itemInfo(id);
-  const same = listings.filter((l) => l.itemId === id).map((l) => l.price);
-  let ref = same.length ? Math.min(...same) : 0;
-  if (!ref) {
-    // no copy at our + level: scale the closest + level of the same item by the forge growth
-    const g = FORGE_GROWTH[info.rarity] ?? 0.05;
-    const base = listings.map((l) => ({ l, i: itemInfo(l.itemId) })).filter((x) => x.i.baseId === info.baseId);
-    if (base.length) {
-      base.sort((a, b) => Math.abs(a.i.plus - info.plus) - Math.abs(b.i.plus - info.plus) || a.l.price - b.l.price);
-      const near = base[0];
-      ref = Math.round(near.l.price * (1 + g * info.plus) / (1 + g * near.i.plus));
-    }
+  const g = FORGE_GROWTH[info.rarity] ?? 0.05;
+  const scaleTo = (price, plus) => Math.round(price * (1 + g * info.plus) / (1 + g * plus));
+  const median = (a) => { const v = [...a].sort((x, y) => x - y); return v.length ? v[Math.floor(v.length / 2)] : 0; };
+  let live = listings.filter((l) => l.itemId === id).map((l) => l.price).sort((x, y) => x - y);
+  let sold = sales.filter((l) => l.itemId === id).map((l) => l.price);
+  if (!live.length && !sold.length) { // nothing at our + level: borrow the nearest + level
+    const near = (arr) => {
+      const c = arr.map((l) => ({ p: l.price, i: itemInfo(l.itemId) })).filter((x) => x.i.baseId === info.baseId);
+      if (!c.length) return [];
+      const d = Math.min(...c.map((x) => Math.abs(x.i.plus - info.plus)));
+      return c.filter((x) => Math.abs(x.i.plus - info.plus) === d).map((x) => scaleTo(x.p, x.i.plus));
+    };
+    live = near(listings).sort((x, y) => x - y); sold = near(sales);
   }
-  if (!ref) return 0;
+  const lastSold = median(sold);
+  // bait: far under the next listing AND under real sales; sky-high asks never set the rate
+  while (live.length > 1 && live[0] < live[1] * 0.5 && (!sold.length || live[0] < lastSold * 0.5)) live.shift();
+  const cheapest = live[0] || 0;
+  let ref = cheapest || lastSold;
+  if (cheapest && lastSold && cheapest < lastSold * 0.5) ref = lastSold; // lone bait listing
   const floor = Math.ceil((SALVAGE_BONE[info.rarity] || 30) * boneLm * 1.1);
-  return Math.max(floor, ref - 1);
+  const price = ref ? Math.max(floor, ref - 1) : 0;
+  return { price, cheapest, lastSold, floor };
 }
+export const sellPrice = (id, listings, sales = [], boneLm) => sellQuote(id, listings, sales, boneLm).price;
 
 // Pull item / pet ids out of a chest-open response, whatever shape it has.
 export function revealed(r) {

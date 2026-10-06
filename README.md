@@ -25,7 +25,7 @@ Main online dari HP: tombol **🎮 Main di browser** atau **🦊 Buka di MetaMas
 
 Installer memasang `git`, `curl`, dan Node.js 22 kalau belum ada, clone ke `~/lootmarch-bot`, menanyakan **BOT_TOKEN** dan **ID Telegram**, membuat `SECRET_KEY` acak, lalu menjalankan bot sebagai service systemd `lootmarch-bot`.
 
-**Layar game 24 jam (opsional, ditanya saat install):** memasang Chromium di layar virtual VPS + noVNC lewat HTTPS dengan password, jadi game bisa jalan terus tanpa PC. Buka linknya sekali dari browser mana pun, pasang Rabby/MetaMask di Chromium itu, login ke `lootmarch.xyz/play`, lalu tinggal. Saat game minta centang "Verify you are human", bot mengirim alert + link layar; kamu yang mencentang. Butuh ±1 core & 1,5 GB RAM. Mau pasang belakangan: `LM_DESKTOP=1` lalu jalankan installer lagi. Punya sertifikat domain sendiri: set `LM_CERT` & `LM_KEY` (default self-signed).
+**Layar game 24 jam (opsional, ditanya saat install):** memasang Chromium di layar virtual VPS + noVNC lewat HTTPS, jadi game bisa jalan terus tanpa PC. Akses lewat **link sekali-tap** di tombol 🖥 dashboard Telegram: halaman noVNC disembunyikan di folder acak dan layar hanya tersambung dengan token rahasia (alamat utama cuma menampilkan "Not found"). Buka sekali, pasang Rabby/MetaMask/OKX di Chromium itu (set auto-lock wallet ke waktu terlama supaya game tidak tertahan), login ke `lootmarch.xyz/play`, lalu tinggal. Saat game minta centang "Verify you are human", bot mengirim alert + link layar; kamu yang mencentang. Butuh ±1 core & 1,5 GB RAM. Mau pasang belakangan: `LM_DESKTOP=1` lalu jalankan installer lagi. Punya sertifikat domain sendiri: set `LM_CERT` & `LM_KEY` (default self-signed).
 
 ### 🪟 Windows 10/11
 

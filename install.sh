@@ -145,13 +145,17 @@ setup_desktop() {
   local CHROME; CHROME=$(command -v chromium || command -v chromium-browser) || { echo "  Chromium tidak terpasang, dilewati"; return; }
   local D="$DIR/desktop"; mkdir -p "$D/profile"; chmod 700 "$D"
   local IP; IP=$(curl -s -4 -m 5 ifconfig.me || hostname -I | awk '{print $1}')
-  local VNCPASS WEBPASS
+  local VNCPASS TOKEN SECRET
   VNCPASS=$(openssl rand -base64 12 | tr -dc 'A-Za-z0-9' | head -c 8)
-  WEBPASS=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)
+  TOKEN=$(openssl rand -hex 16)      # gates the screen connection
+  SECRET=$(openssl rand -hex 12)     # hides the noVNC page behind a random path
   x11vnc -storepasswd "$VNCPASS" "$D/vncpass" >/dev/null 2>&1
+  printf '%s: localhost:5977\n' "$TOKEN" > "$D/tokens"
+  mkdir -p "$D/web"; printf '<!doctype html><title>Not found</title><h1>404</h1>\n' > "$D/web/index.html"
+  ln -sfn /usr/share/novnc "$D/web/$SECRET"
   if [ -n "${LM_CERT:-}" ] && [ -n "${LM_KEY:-}" ]; then cp "$LM_CERT" "$D/cert.pem"; cp "$LM_KEY" "$D/key.pem"
   else openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/CN=$IP" -addext "subjectAltName=IP:$IP" -keyout "$D/key.pem" -out "$D/cert.pem" >/dev/null 2>&1; fi
-  chmod 600 "$D"/*.pem "$D/vncpass"
+  chmod 600 "$D"/*.pem "$D/vncpass" "$D/tokens"
   local U=/etc/systemd/system
   $SUDO tee $U/lm-xvfb.service >/dev/null <<EOF
 [Unit]
@@ -206,10 +210,10 @@ WantedBy=multi-user.target
 EOF
   $SUDO tee $U/lm-novnc.service >/dev/null <<EOF
 [Unit]
-Description=LootMarch desktop: noVNC over HTTPS with basic auth
+Description=LootMarch desktop: noVNC over HTTPS, screen gated by a secret token
 After=lm-vnc.service
 [Service]
-ExecStart=$(command -v websockify) --web /usr/share/novnc --cert $D/cert.pem --key $D/key.pem --ssl-only --web-auth --auth-plugin BasicHTTPAuth --auth-source lm:$WEBPASS $DESKTOP_PORT localhost:5977
+ExecStart=$(command -v websockify) --web $D/web --cert $D/cert.pem --key $D/key.pem --ssl-only --token-plugin TokenFile --token-source $D/tokens $DESKTOP_PORT
 Restart=always
 [Install]
 WantedBy=multi-user.target
@@ -218,11 +222,11 @@ EOF
   $SUDO systemctl daemon-reload
   $SUDO systemctl enable --now lm-xvfb lm-openbox lm-chromium lm-vnc lm-novnc >/dev/null 2>&1
   if command -v ufw >/dev/null && $SUDO ufw status | grep -q "Status: active"; then $SUDO ufw allow "$DESKTOP_PORT/tcp" >/dev/null; fi
-  local URL="https://$IP:$DESKTOP_PORT/vnc.html?autoconnect=1&resize=scale"
-  umask 077; printf 'URL=%s\nWEB_USER=lm\nWEB_PASS=%s\nVNC_PASS=%s\n' "$URL" "$WEBPASS" "$VNCPASS" > "$D/credentials"
+  local URL="https://$IP:$DESKTOP_PORT/$SECRET/vnc.html?autoconnect=1&resize=scale&reconnect=1&path=websockify%3Ftoken%3D$TOKEN&password=$VNCPASS"
+  umask 077; printf 'URL=%s\nTOKEN=%s\nVNC_PASS=%s\nWEB_SECRET=%s\n' "$URL" "$TOKEN" "$VNCPASS" "$SECRET" > "$D/credentials"
   set_env DESKTOP_URL "$URL"
-  ok "Layar game siap: $URL"
-  echo "  Login browser: lm / $WEBPASS   ·   password VNC: $VNCPASS   (disimpan di $D/credentials)"
+  ok "Layar game siap. Link sekali-tap ada di tombol 🖥 dashboard Telegram (juga di $D/credentials)."
+  echo "  Link itu = kunci layar kamu, jangan dibagikan. Ganti token: edit $D/tokens dan DESKTOP_URL di .env."
   echo "  Sertifikat self-signed: browser akan memperingatkan sekali, pilih lanjutkan."
   echo "  Buka sekali → pasang Rabby/MetaMask di Chromium → login lootmarch.xyz/play. Setelah itu tab boleh ditinggal."
 }
