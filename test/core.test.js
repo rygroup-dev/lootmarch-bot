@@ -534,3 +534,12 @@ test('market upgrades never buy below the rarity already worn', async () => {
   const plan = suggestUpgrades(st, [{ id: 'S', itemId: 'steel_buckler@17', price: 500 }], 100000);
   assert.equal(plan.picks.length, 0);
 });
+
+test('forged items are priced up from the nearest + level, not at +0', async () => {
+  const { sellPrice } = await import('../src/autopilot.js');
+  const listings = [{ itemId: 'steel_buckler', price: 2400 }, { itemId: 'steel_buckler@20', price: 9000 }];
+  const p17 = sellPrice('steel_buckler@17', listings);
+  assert.ok(p17 > 4000 && p17 < 9000, String(p17)); // scaled from the +20 copy
+  assert.equal(sellPrice('steel_buckler', listings), 2399);
+  assert.equal(sellPrice('steel_buckler@3', [{ itemId: 'steel_buckler', price: 2400 }]), Math.round(2400 * 1.18) - 1);
+});

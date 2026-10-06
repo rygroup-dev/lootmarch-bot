@@ -1,5 +1,5 @@
 import { ApiError } from './api.js';
-import { CAT, itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, petProgress, heroPower, regionName } from './catalog.js';
+import { CAT, FORGE_GROWTH, itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, petProgress, heroPower, regionName } from './catalog.js';
 import { BUILDS, resolveBuild, planEquip } from './game.js';
 
 const H = 3600 * 1000;
@@ -391,8 +391,17 @@ const SALVAGE_BONE = { common: 30, uncommon: 80, rare: 200, epic: 500, legendary
 export function sellPrice(id, listings, boneLm = 4.4) {
   const info = itemInfo(id);
   const same = listings.filter((l) => l.itemId === id).map((l) => l.price);
-  const base = listings.filter((l) => itemInfo(l.itemId).baseId === info.baseId).map((l) => l.price);
-  const ref = same.length ? Math.min(...same) : base.length ? Math.min(...base) : 0;
+  let ref = same.length ? Math.min(...same) : 0;
+  if (!ref) {
+    // no copy at our + level: scale the closest + level of the same item by the forge growth
+    const g = FORGE_GROWTH[info.rarity] ?? 0.05;
+    const base = listings.map((l) => ({ l, i: itemInfo(l.itemId) })).filter((x) => x.i.baseId === info.baseId);
+    if (base.length) {
+      base.sort((a, b) => Math.abs(a.i.plus - info.plus) - Math.abs(b.i.plus - info.plus) || a.l.price - b.l.price);
+      const near = base[0];
+      ref = Math.round(near.l.price * (1 + g * info.plus) / (1 + g * near.i.plus));
+    }
+  }
   if (!ref) return 0;
   const floor = Math.ceil((SALVAGE_BONE[info.rarity] || 30) * boneLm * 1.1);
   return Math.max(floor, ref - 1);
