@@ -542,3 +542,14 @@ test('forged items are priced up from the nearest + level, not at +0', async () 
   assert.equal(sellPrice('steel_buckler', listings), 2399);
   assert.equal(sellPrice('steel_buckler@3', [{ itemId: 'steel_buckler', price: 2400 }]), Math.round(2400 * 1.18) - 1);
 });
+
+test('hold below the dungeon minimum raises one alert', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  srv.hold = { required: 20000, ok: false, holds: 5000, verified: true, checkedAt: 77 };
+  const a = await runRound(game, store);
+  assert.ok(a.log.some((l) => l.includes('Hold kurang')));
+  game.forget('hold');
+  const b = await runRound(game, store);
+  assert.ok(!b.log.some((l) => l.includes('Hold kurang')), 'same check, no repeat');
+});

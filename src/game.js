@@ -1,5 +1,7 @@
 import { LootMarchApi, ApiError } from './api.js';
 import { WalletService, LM_TOKEN } from './wallet.js';
+import { ethers } from 'ethers';
+const fmtUnitsRaw = (v) => ethers.formatUnits(v, 18);
 import { signInWithKey } from './auth.js';
 import { itemInfo, RARITY_RANK, ZONES_PER_FLOOR, chestPrice, heroPower, canWear, isPetId, CAT } from './catalog.js';
 
@@ -360,6 +362,20 @@ export class Game {
     if (fresh) this.forget('withdraw');
     return this.cached('withdraw', 60000, () => this.call((a) => a.withdrawInfo()));
   }
+  hold(ttl = 10 * 60000) { return this.cached('hold', ttl, () => this.call((a) => a.hold())); }
+
+  // Refuse wallet moves that would drop the on-chain $LM below the dungeon hold.
+  async assertHoldAfter(spendLm) {
+    let h = null;
+    try { h = await this.hold(0); } catch { return; } // unknown: let the server decide
+    if (!h?.required) return;
+    const b = await this.walletBalances();
+    const left = Number(fmtUnitsRaw(b.lm)) - Number(spendLm);
+    if (left < h.required) {
+      throw new Error(`Ditolak: sisa $LM di wallet jadi ${Math.floor(left).toLocaleString('en-US')}, padahal game mewajibkan hold minimal ${h.required.toLocaleString('en-US')} $LM untuk masuk dungeon.`);
+    }
+  }
+
   live(ttl = 60000) { return this.cached('live', ttl, () => this.call((a) => a.live())); }
   online() { return this.cached('feed', 60000, () => this.api.feed(0)).then((f) => f.online).catch(() => null); }
 
@@ -386,6 +402,7 @@ export class Game {
   }
 
   async deposit(amount, onStep = () => {}) {
+    await this.assertHoldAfter(amount);
     const info = await this.depositInfo();
     if (!info.open) throw new Error('Deposit belum dibuka oleh game.');
     const w = this.wallet();
@@ -429,6 +446,7 @@ export class Game {
   }
 
   async send(kind, to, amount) {
+    if (kind !== 'eth') await this.assertHoldAfter(amount);
     this.cache.clear();
     const w = this.wallet();
     if (kind === 'eth') return w.sendEth(to, amount);

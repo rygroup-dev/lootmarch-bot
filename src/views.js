@@ -28,7 +28,7 @@ export const METAMASK_DAPP_URL = 'https://metamask.app.link/dapp/lootmarch.xyz/p
 
 const ago = (ms) => (ms ? dur((Date.now() - ms) / 1000) + ' lalu' : 'belum');
 
-export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings, desktopUrl, prog } = {}) {
+export function homeView(st, { live, online, autopilot, daily, pass, lastRun, nextAfkIn, travelIn, settings, desktopUrl, prog, hold } = {}) {
   const c = st.character || {};
   const pr = st.progress || {};
   const b = st.balances || {};
@@ -55,6 +55,7 @@ export function homeView(st, { live, online, autopilot, daily, pass, lastRun, ne
     lines.push(`📜 Quest ${done}/${ms.length} diklaim${ready ? ` · 🎁 ${ready} siap` : ''} · daily ${daily.board?.claimed ? '✅' : `${daily.board?.completed ?? 0}/${daily.board?.required ?? 4}`} · login ${daily.login?.claimedToday ? '✅' : '🎁'}`);
   }
   if (pass) lines.push(`🎫 Pass tier <b>${pass.tier}</b>/${pass.maxTier} · ${n(pass.xp - pass.tier * pass.tierXp)}/${n(pass.tierXp)} XP${pass.premium ? ' · ♛' : ''}${pass.claimable ? ' · 🎁 siap klaim' : ''}`);
+  if (hold?.required) lines.push(`🔐 Hold wallet: ${n(hold.holds)} / ${n(hold.required)} $LM ${hold.ok ? '✅' : '⛔ <b>kurang — dungeon terkunci</b>'}`);
   if (live) {
     if (!live.needed) lines.push('🛡 Live check: tidak diperlukan');
     else if (live.held > 0) lines.push(`🛡 Live check: ⚠️ <b>${n(live.held)} $LM tertahan</b> — buka game di browser sebentar`);
@@ -458,7 +459,7 @@ export function ranksView(lb) {
 }
 
 // ---------------------------------------------------------------- wallet
-export function walletView({ address, eth, lm, game, dep, wd, explorer, fmtEth, fmtLm }) {
+export function walletView({ address, eth, lm, game, dep, wd, hold, explorer, fmtEth, fmtLm }) {
   const lines = ['💰 <b>Wallet</b> (Robinhood Chain)', ''];
   if (!address) {
     lines.push('Belum ada wallet. Import private key wallet yang kamu pakai login di lootmarch.xyz, atau buat wallet baru.');
@@ -469,6 +470,7 @@ export function walletView({ address, eth, lm, game, dep, wd, explorer, fmtEth, 
   lines.push(`Ξ ETH: <b>${eth != null ? fmtEth(eth) : '?'}</b>`, `🪙 $LM on-chain: <b>${lm != null ? fmtLm(lm) : '?'}</b>`, `🎮 $LM di game: <b>${n(game)}</b>`);
   if (dep) lines.push('', `Deposit: ${dep.open ? '✅ buka' : '⛔ tutup'}`);
   if (wd) lines.push(`Withdraw: ${wd.open ? '✅ buka' : '⛔ tutup'} · ${n(wd.min)}–${n(wd.max)} $LM · ${wd.usedToday}/${wd.perDay} hari ini · wallet wajib pegang ≥ ${n(wd.holdMin)} $LM`);
+  if (hold?.required) lines.push(`🔐 Syarat main: wallet pegang ≥ <b>${n(hold.required)} $LM</b> (sekarang ${n(hold.holds)}) ${hold.ok ? '✅' : '⛔'}. Kirim/deposit yang membuat saldo di bawah ini ditolak bot.`);
   for (const r of (wd?.requests || []).slice(0, 3)) lines.push(`  • ${n(r.amount)} $LM — ${esc(r.status || r.state || '?')}`);
   const kb = new InlineKeyboard()
     .text('⬇️ Deposit $LM', 'w:dep').text('⬆️ Withdraw', 'w:wd').row()

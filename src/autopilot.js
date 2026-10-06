@@ -35,6 +35,18 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     prog = recordProgress(store, { at: now, rooms: p.today?.rooms ?? 0, depth: st.progress?.best_depth ?? 0, zone: st.progress?.zone_index ?? 0, floor: st.progress?.floor ?? 1 });
   });
 
+  // The dungeon needs a minimum $LM in the wallet (server: /game/hold). Below it the game blocks play.
+  await step('Hold', async () => {
+    const h = await game.hold();
+    if (!h?.required) return;
+    if (!h.ok) {
+      if (store.cursor('holdAlert') !== h.checkedAt) {
+        store.setCursor('holdAlert', h.checkedAt);
+        log.push(`🔐 <b>Hold kurang!</b> Wallet memegang ${fmt(h.holds)} $LM, game mewajibkan ${fmt(h.required)} $LM untuk masuk dungeon. Isi wallet dulu, hero tidak bisa main.`);
+      }
+    } else if (store.cursor('holdAlert')) store.setCursor('holdAlert', 0);
+  });
+
   await step('Live check', async () => {
     if (!s.alertLive) return;
     const lv = await game.live(0);

@@ -110,6 +110,8 @@ export class LootMarchApi {
 
   // --- state & progress ---
   state() { return this.get('/game/state'); }
+  // wallet hold needed to enter the dungeon -> { required, ok, holds, verified, checkedAt, token }
+  hold(recheck = false) { return this.get('/game/hold' + (recheck ? '?recheck=1' : '')); }
   live() { return this.get('/game/live'); }
   daily() { return this.get('/game/daily'); }
   pass() { return this.get('/game/pass'); }

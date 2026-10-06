@@ -52,7 +52,7 @@ export function makePass(over = {}) {
 // Minimal in-memory LootMarch server for fetch().
 export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', requireCaptcha = false } = {}) {
   const calls = [];
-  const srv = { listings: [
+  const srv = { hold: { required: 20000, ok: true, holds: 550000, verified: true, checkedAt: 1 }, listings: [
     { id: 'L1', itemId: 'bronze_sabre', price: 400, at: 1, petXp: null, seller: 'X' },          // sword: wrong class for a dagger hero
     { id: 'L2', itemId: 'hide_brigandine', price: 74, at: 1, petXp: null, seller: 'Y' },        // armor slot is empty
     { id: 'L3', itemId: 'nightshade_stiletto', price: 9e9, at: 1, petXp: null, seller: 'Z' },   // too expensive
@@ -82,6 +82,7 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       case '/auth/session': return json(200, { address: srv.wallet || ADDR });
       case '/game/state': return json(200, srv.state);
       case '/game/live': return json(200, srv.live);
+      case '/game/hold': return json(200, srv.hold);
       case '/offline/prepare': return json(200, { seconds: 7200, rewards: { lm: 900, xp: 3000, bone: 100, kills: 600, items: [], basis: 'recent' }, cap: 28800 });
       case '/offline/claim': srv.state.balances.LM += 900; return wrap({ seconds: 7200, rewards: { lm: 900, xp: 3000, bone: 100, items: [] } });
       case '/game/loot/claim': srv.state.balances.Bone += srv.state.pendingLoot.bone; { const c = { bone: srv.state.pendingLoot.bone, items: 1 }; srv.state.pendingLoot = { bone: 0, items: [], drops: 0 }; return wrap({ claimed: c }); }

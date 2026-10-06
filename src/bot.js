@@ -84,17 +84,18 @@ export function createBot({ cfg, store, game, autopilot }) {
       });
     }
     if (game.needsHero(await game.state(10000))) return show(ctx, V.newHeroClassView());
-    const [st, live, online, daily, pass] = await Promise.all([
+    const [st, live, online, daily, pass, hold] = await Promise.all([
       game.state(fresh ? 0 : 10000),
       game.live(fresh ? 0 : 60000).catch(() => null),
       game.online(),
       game.cached('daily', fresh ? 0 : 60000, () => game.daily()).catch(() => null),
       game.cached('pass', fresh ? 0 : 60000, () => game.pass()).catch(() => null),
+      game.hold(fresh ? 0 : 10 * 60000).catch(() => null),
     ]);
     const s = store.settings;
     const afkAt = store.cursor('afkAt');
     return show(ctx, V.homeView(st, {
-      live, online, daily, pass, settings: s, autopilot: true, desktopUrl: cfg.desktopUrl,
+      live, online, daily, pass, hold, settings: s, autopilot: true, desktopUrl: cfg.desktopUrl,
       prog: progressStats(store.data.samples || []),
       lastRun: store.cursor('lastRun'),
       nextAfkIn: afkAt ? (afkAt + s.afkHours * 3600000 - Date.now()) / 1000 : 0,
@@ -117,19 +118,20 @@ export function createBot({ cfg, store, game, autopilot }) {
 
   async function walletScreen(ctx) {
     const address = store.walletAddress();
-    let eth = null; let lm = null; let dep = null; let wd = null;
+    let eth = null; let lm = null; let dep = null; let wd = null; let hold = null;
     let st = null;
     if (address) {
       const s = !!store.data.session;
-      const [b, d, w, g] = await Promise.all([
+      const [b, d, w, g, hh] = await Promise.all([
         game.walletBalances().catch(() => null),
         s ? game.depositInfo().catch(() => null) : null,
         s ? game.withdrawInfo().catch(() => null) : null,
         s ? game.state(20000).catch(() => null) : null,
+        s ? game.hold().catch(() => null) : null,
       ]);
-      eth = b?.eth ?? null; lm = b?.lm ?? null; dep = d; wd = w; st = g;
+      eth = b?.eth ?? null; lm = b?.lm ?? null; dep = d; wd = w; st = g; hold = hh;
     }
-    return show(ctx, V.walletView({ address, eth, lm, game: st?.balances?.LM, dep, wd, explorer: cfg.explorer, fmtEth, fmtLm: (v) => fmtUnits(v, 18, 2) }));
+    return show(ctx, V.walletView({ address, eth, lm, game: st?.balances?.LM, dep, wd, hold, explorer: cfg.explorer, fmtEth, fmtLm: (v) => fmtUnits(v, 18, 2) }));
   }
 
   const txLink = (hash) => `<a href="${cfg.explorer}/tx/${hash}">${hash.slice(0, 10)}…</a>`;
