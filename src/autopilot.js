@@ -514,10 +514,8 @@ export function startAutopilot({ game, store, notify, tickSeconds, feedSeconds }
       for (const ev of f.events || []) {
         const own = mine && ev.name === mine;
         if (!own && !store.settings.alertDrops) continue;
-        if (ev.itemId) {
-          const who = own ? '🎉 <b>Drop kamu!</b>' : `📣 ${esc(ev.name)}`;
-          await notify(`${who} ${esc(itemInfo(ev.itemId).name)} (${ev.rarity}) dari ${ev.source || 'drop'}`);
-        }
+        const text = feedText(ev, own);
+        if (text) await notify(text);
       }
       if (f.last) store.setCursor('feedId', f.last);
     } catch { /* feed is best effort */ }
@@ -527,6 +525,25 @@ export function startAutopilot({ game, store, notify, tickSeconds, feedSeconds }
   const t2 = setInterval(feed, feedSeconds * 1000);
   setTimeout(tick, 5000);
   return { tick, stop: () => { clearInterval(t1); clearInterval(t2); } };
+}
+
+// The game's live feed carries two kinds of announcements (same shapes as its client):
+//  - floors: itemId "floor_<n>", source "floor" (broke the seal) or "floor_first" (first hero ever)
+//  - finds:  a Legendary/Mythic itemId, source "drop" (found) or "chest" (opened a chest)
+export function feedText(ev, own) {
+  if (!ev?.itemId) return '';
+  if (String(ev.itemId).startsWith('floor_')) {
+    const floor = Number(String(ev.itemId).slice(6));
+    const first = ev.source === 'floor_first';
+    if (own) return first ? `🏆 <b>Kamu hero PERTAMA</b> yang mencapai Floor ${floor}! Diumumkan ke semua pemain.` : `🏰 <b>Kamu membuka seal Floor ${floor}!</b> Diumumkan ke semua pemain.`;
+    return first ? `🏆 ${esc(ev.name)} jadi hero pertama yang mencapai Floor ${floor}` : '';
+  }
+  const item = itemInfo(ev.itemId);
+  const how = ev.source === 'chest' ? 'dari chest' : 'dari dungeon';
+  const star = ev.rarity === 'mythic' ? '🌟' : '✨';
+  return own
+    ? `🎉 <b>Drop kamu!</b> ${star} ${esc(item.name)} (<b>${esc(ev.rarity)}</b>) ${how}. Bot memasangnya kalau lebih tinggi rarity-nya dari yang dipakai.`
+    : `📣 ${esc(ev.name)} dapat ${star} ${esc(item.name)} (${esc(ev.rarity)}) ${how}`;
 }
 
 export const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

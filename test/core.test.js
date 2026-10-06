@@ -611,3 +611,13 @@ test('forge respects the daily $LM budget', async () => {
   await runRound(game, store);
   assert.equal(srv.calls.filter((c) => c.path === '/game/forge').length, forges, 'budget used up for today');
 });
+
+test('feed announcements: floor seals are not mistaken for item drops', async () => {
+  const { feedText } = await import('../src/autopilot.js');
+  assert.match(feedText({ itemId: 'floor_2', source: 'floor', name: 'me' }, true), /membuka seal Floor 2/);
+  assert.match(feedText({ itemId: 'floor_9', source: 'floor_first', name: 'me' }, true), /PERTAMA.*Floor 9/);
+  assert.equal(feedText({ itemId: 'floor_3', source: 'floor', name: 'x' }, false), '', 'other players breaking seals: quiet');
+  const drop = feedText({ itemId: 'nightshade_stiletto', rarity: 'legendary', source: 'drop', name: 'me' }, true);
+  assert.match(drop, /Drop kamu!.*Nightshade Stiletto.*legendary.*dari dungeon/);
+  assert.match(feedText({ itemId: 'nightshade_stiletto', rarity: 'legendary', source: 'chest', name: 'x' }, false), /dari chest/);
+});
