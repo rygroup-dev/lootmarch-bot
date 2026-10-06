@@ -273,7 +273,11 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
       const target = forgeTarget(st.equipped || {}, forgeFloor(st.equipped || {}));
       if (!target) break;
       // the first failure is reported; later ones just mean materials ran out
-      try { await game.forge(target, 1); } catch (e) { if (!done) throw e; break; }
+      try { await game.forge(target, 1); } catch (e) {
+        if (/not enough|insufficient/i.test(e.message)) break; // out of Bone/$LM: normal, wait for more
+        if (!done) throw e;
+        break;
+      }
       const after = game.last || st;
       if ((after.balances?.LM || 0) < s.forgeReserveLm || (after.balances?.Bone || 0) < s.forgeReserveBone) { st = after; done++; break; }
       st = after; done++;

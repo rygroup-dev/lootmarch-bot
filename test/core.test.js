@@ -503,3 +503,15 @@ test('stale listings: uncommon pulled and salvaged, rare repriced under a cheape
   assert.ok(log.some((l) => l.includes('Harga disesuaikan')));
   assert.ok(!log.some((l) => l.includes('Terjual')), 'cancelled listings are not reported as sold');
 });
+
+test('forge running out of Bone is quiet, not an error', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  store.setSetting('autoForge', true);
+  srv.state.equipped = { weapon: 'crystal_dirk@2' };
+  const orig = srv.fetch;
+  srv.fetch = async (url, init) => (String(url).endsWith('/game/forge') ? new Response(JSON.stringify({ error: 'NoBone', message: 'Not enough Bone.' }), { status: 400 }) : orig(url, init));
+  game.api.fetch = srv.fetch;
+  const { errors } = await runRound(game, store);
+  assert.ok(!errors.some((e) => e.includes('Forge')), errors.join('|'));
+});
