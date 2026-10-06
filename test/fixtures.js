@@ -7,7 +7,7 @@ export function makeState(over = {}) {
     prices: { lmUsd: 0.00004, chests: { chest_common: 2500, chest_rare: 25000, chest_epic: 75000, chest_legendary: 175000, chest_mythic_weapon: 2000000, chest_mythic_equipment: 2000000 }, bonePack: { bone: 100, lm: 500 } },
     balances: { Bone: 1000, Gem: 0, XP: 1277, LM: 20000 },
     // like the real game: `items` is the backpack only; worn gear lives in `equipped`
-    items: { stiletto_rusty: 0, rusty_stiletto: 3, 'rusty_stiletto@4': 1, iron_greathelm: 2, steel_stiletto: 1, chest_common: 1 },
+    items: { stiletto_rusty: 0, rusty_stiletto: 3, 'rusty_stiletto@4': 1, iron_greathelm: 2, steel_sabre: 1, chest_common: 1 },
     pendingLoot: { bone: 6, items: [], drops: 4 },
     equipped: { weapon: 'bronze_stiletto@2', helmet: 'iron_greathelm' },
     progress: { user_id: ADDR, zone_index: 2, floor: 1, fortune_until: 0, best_depth: 3, floor_travel_at: 0, floor_unlocked: 1, floor_gate: 0 },
@@ -57,7 +57,7 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
     { id: 'L2', itemId: 'hide_brigandine', price: 74, at: 1, petXp: null, seller: 'Y' },        // armor slot is empty
     { id: 'L3', itemId: 'nightshade_stiletto', price: 9e9, at: 1, petXp: null, seller: 'Z' },   // too expensive
     { id: 'L4', itemId: 'pet:craboulder:rare', price: 80000, at: 1, petXp: 6000, seller: 'P' },
-    { id: 'L5', itemId: 'steel_stiletto', price: 3000, at: 1, petXp: null, seller: 'Q' },
+    { id: 'L5', itemId: 'steel_sabre', price: 3000, at: 1, petXp: null, seller: 'Q' },
   ], state, calls, live: { mode: 'monitor', needed: true, valid: true, expiresAt: 9e9, held: 0, ttl: 3600 }, daily: structuredClone(DAILY), pass: makePass(), loggedIn: false, wallet: null };
   const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
   srv.fetch = async (url, init = {}) => {

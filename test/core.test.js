@@ -188,13 +188,13 @@ test('autopilot round: AFK, loot, equip, salvage, attrs, quests', async () => {
   assert.deepEqual(errors, []);
   const paths = srv.calls.map((c) => c.path);
   assert.ok(log.some((l) => l.includes('Chest dibuka') && l.includes('Steel Stiletto')), 'pass/quest chests are opened');
-  for (const p of ['/offline/claim', '/game/loot/claim', '/game/chest/open', '/game/equipment/best', '/game/inventory/salvage', '/game/character/attributes', '/game/daily/mission/claim', '/game/daily/login/claim']) {
+  for (const p of ['/offline/claim', '/game/loot/claim', '/game/chest/open', '/game/equipment/equip', '/game/inventory/salvage', '/game/character/attributes', '/game/daily/mission/claim', '/game/daily/login/claim']) {
     assert.ok(paths.includes(p), 'missing ' + p);
   }
   assert.ok(!paths.includes('/game/forge'), 'forge is opt-in');
   assert.equal(srv.calls.find((c) => c.path === '/game/inventory/salvage').body.keep, 0, 'quick salvage: no copy kept');
   assert.ok(paths.includes('/game/inventory/destroy'), 'forged spare salvaged one by one');
-  assert.ok(srv.state.items.steel_stiletto >= 1, 'rare spare is not salvaged');
+  assert.ok(srv.state.items.steel_sabre >= 1 || srv.state.market.some((l) => l.itemId === 'steel_sabre'), 'rare spare is kept for sale, not salvaged');
   assert.ok(log.some((l) => l.includes('AFK')));
   // second round right after: nothing to do again
   srv.calls.length = 0;
@@ -423,7 +423,7 @@ test('rare spare gear is listed just under the cheapest same item', async () => 
   store.setSetting('autoUpgrade', false);
   await runRound(game, store);
   const list = srv.calls.find((c) => c.path === '/game/market/list');
-  assert.equal(list.body.itemId, 'steel_stiletto');
+  assert.equal(list.body.itemId, 'steel_sabre');
   assert.equal(list.body.price, 2999);
 });
 
@@ -458,12 +458,12 @@ test('market: uncommon listed with a slot kept for rare, sales reported', async 
   await game.login();
   store.setSetting('autoUpgrade', false);
   store.setSetting('salvageLevel', 0);
-  srv.state.items = { steel_stiletto: 1, frost_glaive: 1 };            // rare + uncommon spare (uncommon sold when salvageLevel is 0)
+  srv.state.items = { steel_sabre: 1, frost_glaive: 1 };            // rare + uncommon spare (uncommon sold when salvageLevel is 0)
   srv.listings.push({ id: 'L6', itemId: 'frost_glaive', price: 900, at: 1, seller: 'Z' });
   srv.state.market = [1, 2, 3].map((i) => ({ id: 'old' + i, itemId: 'iron_sword', price: 50 }));
   await runRound(game, store);
   const lists = srv.calls.filter((c) => c.path === '/game/market/list').map((c) => c.body.itemId);
-  assert.deepEqual(lists, ['steel_stiletto'], 'rare first; uncommon may not take the last free slot');
+  assert.deepEqual(lists, ['steel_sabre'], 'rare first; uncommon may not take the last free slot');
   assert.ok(srv.calls.some((c) => c.path === '/game/inventory/destroy' && c.body.itemId === 'frost_glaive'), 'uncommon without a slot is salvaged');
   srv.state.market = srv.state.market.filter((l) => l.id !== 'old1'); // old1 sold
   store.setCursor('lootAt', 0);
@@ -493,13 +493,13 @@ test('stale listings: uncommon pulled and salvaged, rare repriced under a cheape
   srv.state.items = {};
   srv.state.market = [
     { id: 'u1', itemId: 'frost_glaive', price: 388, at: old },
-    { id: 'r1', itemId: 'steel_stiletto', price: 9000, at: old },
+    { id: 'r1', itemId: 'steel_sabre', price: 9000, at: old },
   ];
-  srv.listings.push({ id: 'c1', itemId: 'steel_stiletto', price: 4000, at: 1, seller: 'Rival' });
+  srv.listings.push({ id: 'c1', itemId: 'steel_sabre', price: 4000, at: 1, seller: 'Rival' });
   const { log } = await runRound(game, store);
   assert.ok(srv.calls.some((c) => c.path === '/game/inventory/destroy' && c.body.itemId === 'frost_glaive'));
   const relist = srv.calls.filter((c) => c.path === '/game/market/list').map((c) => c.body);
-  assert.deepEqual(relist, [{ itemId: 'steel_stiletto', price: 2999, actionId: relist[0].actionId }], 'one under the cheapest rival (3,000)');
+  assert.deepEqual(relist, [{ itemId: 'steel_sabre', price: 2999, actionId: relist[0].actionId }], 'one under the cheapest rival (3,000)');
   assert.ok(log.some((l) => l.includes('Harga disesuaikan')));
   assert.ok(!log.some((l) => l.includes('Terjual')), 'cancelled listings are not reported as sold');
 });
@@ -514,4 +514,23 @@ test('forge running out of Bone is quiet, not an error', async () => {
   game.api.fetch = srv.fetch;
   const { errors } = await runRound(game, store);
   assert.ok(!errors.some((e) => e.includes('Forge')), errors.join('|'));
+});
+
+test('equip policy: higher rarity wins even when weaker today; same rarity by Power; class respected', async () => {
+  const { planEquip } = await import('../src/game.js');
+  const st = makeState({ equipped: { shield: 'steel_buckler@17', weapon: 'crystal_dirk@10' } });
+  st.items = { silver_buckler: 1, steel_buckler: 1, viper_kris: 1, frost_glaive: 1 };
+  const picks = planEquip(st);
+  assert.ok(picks.includes('silver_buckler'), 'epic +0 replaces rare +17');
+  assert.ok(!picks.includes('frost_glaive'), 'spear is not for a dagger hero');
+  const same = makeState({ equipped: { weapon: 'crystal_dirk@10' } });
+  same.items = { 'crystal_dirk@2': 1 };
+  assert.deepEqual(planEquip(same), [], 'a weaker copy of the same rarity stays in the bag');
+});
+
+test('market upgrades never buy below the rarity already worn', async () => {
+  const { suggestUpgrades } = await import('../src/game.js');
+  const st = makeState({ equipped: { shield: 'silver_buckler', weapon: 'crystal_dirk@10' } });
+  const plan = suggestUpgrades(st, [{ id: 'S', itemId: 'steel_buckler@17', price: 500 }], 100000);
+  assert.equal(plan.picks.length, 0);
 });

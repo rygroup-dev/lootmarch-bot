@@ -51,6 +51,26 @@ export function attrDelta(from, to) {
   return Object.fromEntries(ATTRS.map((k) => [k, Math.max(0, (to[k] || 0) - (from[k] || 0))]));
 }
 
+// Equip policy: per slot the highest rarity wins (a forged epic outgrows a
+// rare, +8 % vs +6 % per level), then the higher Power. Pure; returns the
+// item ids to equip, one per slot that should change.
+export function planEquip(st) {
+  const rank = (id) => RARITY_RANK[itemInfo(id).rarity] ?? 0;
+  const out = [];
+  for (const slot of CAT.slots) {
+    const cur = st.equipped?.[slot] || null;
+    let best = cur; let bestPow = cur ? heroPower(st) : -1;
+    for (const [id, q] of Object.entries(st.items || {})) {
+      if (!q || itemInfo(id).slot !== slot || !canWear(st, id)) continue;
+      const pow = heroPower(st, { ...(st.equipped || {}), [slot]: id });
+      const better = !best || rank(id) > rank(best) || (rank(id) === rank(best) && pow > bestPow);
+      if (better) { best = id; bestPow = pow; }
+    }
+    if (best && best !== cur) out.push(best);
+  }
+  return out;
+}
+
 export const MARKET_BUY_FEE = 0.05;
 // Skip poor buys: an upgrade must add 2% Power, and every step up must be
 // worth at least 1 Power per 100 $LM (good market buys run 0.03-0.1 per $LM).
@@ -66,6 +86,9 @@ export function suggestUpgrades(st, listings, budget) {
   for (const l of listings || []) {
     if (isPetId(l.itemId) || !canWear(st, l.itemId)) continue;
     const info = itemInfo(l.itemId);
+    const worn = st.equipped?.[info.slot];
+    // never buy below the rarity already worn in that slot (it would be swapped back out)
+    if (worn && (RARITY_RANK[info.rarity] ?? 0) < (RARITY_RANK[itemInfo(worn).rarity] ?? 0)) continue;
     const cost = Math.ceil(l.price * (1 + MARKET_BUY_FEE));
     const gain = heroPower(st, { ...(st.equipped || {}), [info.slot]: l.itemId }) - base;
     if (gain < Math.max(1, base * MIN_GAIN_SHARE) || gain / cost < MIN_POWER_PER_LM || cost > budget) continue;

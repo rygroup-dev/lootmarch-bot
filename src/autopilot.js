@@ -1,6 +1,6 @@
 import { ApiError } from './api.js';
 import { CAT, itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, petProgress, heroPower, regionName } from './catalog.js';
-import { BUILDS, resolveBuild } from './game.js';
+import { BUILDS, resolveBuild, planEquip } from './game.js';
 
 const H = 3600 * 1000;
 const fmt = (n) => Math.round(n || 0).toLocaleString('en-US');
@@ -114,15 +114,18 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     if (got.length) log.push('📦 Chest dibuka: ' + got.map((x) => (isPetId(x) ? '🐾 ' + petInfo(x).name : itemLabel(x, { short: true }))).join(', '));
   });
 
-  await step('Equip best', async () => {
+  // Equip by policy (highest rarity first, then Power) instead of the server's
+  // "Equip best", which prefers a +17 rare over a fresh epic that will outgrow it.
+  await step('Equip', async () => {
     if (!s.autoEquip) return;
-    const sig = JSON.stringify(Object.keys(st.items || {}).sort());
-    if (!newGear && store.cursor('equipSig', '') === sig) return;
-    const before = JSON.stringify(st.equipped || {});
-    await game.equipBest();
-    st = game.last || st;
-    store.setCursor('equipSig', JSON.stringify(Object.keys(st.items || {}).sort()));
-    if (JSON.stringify(st.equipped || {}) !== before) log.push('🧥 Equip best: gear terbaik dipasang.');
+    const picks = planEquip(st);
+    const done = [];
+    for (const id of picks) {
+      await game.equip(id);
+      st = game.last || st;
+      done.push(itemLabel(id, { short: true }));
+    }
+    if (done.length) log.push(`🧥 Dipakai: ${done.join(', ')}`);
   });
 
   await step('Upgrade', async () => {
