@@ -485,7 +485,8 @@ export function settingsView(s, { address, session }) {
   const t = (k, label) => kb.text(`${ON(s[k])} ${label}`, 'set:t:' + k);
   t('autoAfk', `AFK tiap ${s.afkHours}j`); t('autoLoot', 'Klaim loot'); kb.row();
   t('autoEquip', 'Equip best'); t('autoAttr', 'Auto attribute'); kb.row();
-  t('autoSalvage', `Salvage s/d ${CAT.rarities[s.salvageLevel]}`); t('autoForge', 'Auto forge'); kb.row();
+  t('autoSalvage', `Salvage s/d ${CAT.rarities[s.salvageLevel]}`); t('autoForge', 'Auto forge (epic+)'); kb.row();
+  t('autoFeedPet', 'Feed pet (epic+)'); kb.row();
   t('autoDaily', 'Quest'); t('autoPass', 'Pass'); kb.row();
   t('autoSeal', 'Auto seal floor'); t('autoTravel', 'Travel floor baru'); kb.row();
   t('autoChest', 'Buka chest'); t('autoSell', 'Jual gear sisa'); kb.row();
@@ -496,7 +497,7 @@ export function settingsView(s, { address, session }) {
   kb.text(`⏱ AFK: ${s.afkHours}j`, 'set:afk').text(`🏗 Build: ${BUILDS[s.build]?.name}`, 'hero:build').row();
   kb.text(`♻️ Salvage: ${CAT.rarities[s.salvageLevel]}`, 'set:salv').text(`🔨 Cadangan: ${n(s.forgeReserveLm)} LM`, 'set:fres').row();
   kb.text('🔐 Login ulang', 'set:login').text('🚪 Logout game', 'set:logout');
-  lines.push(`Forge otomatis hanya jalan kalau $LM > ${n(s.forgeReserveLm)} dan Bone > ${n(s.forgeReserveBone)}.`);
+  lines.push(`Forge & feed pet hanya untuk epic ke atas (legendary ke atas kalau 7 slot sudah legendary), dan hanya kalau $LM > ${n(s.forgeReserveLm)} dan Bone > ${n(s.forgeReserveBone)}.`);
   return { text: lines.join('\n'), kb: back(kb) };
 }
 

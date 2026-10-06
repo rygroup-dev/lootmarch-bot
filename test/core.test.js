@@ -224,6 +224,7 @@ test('autopilot only alerts when the seal is too expensive', async () => {
 
 test('auto forge stops at the reserve', async () => {
   const { srv, store, game } = setup();
+  srv.state.equipped = { weapon: 'crystal_dirk@2', boots: 'mithril_sabatons' };
   await game.login();
   store.setSetting('autoForge', true);
   store.setSetting('forgeReserveLm', 17000);
@@ -231,6 +232,19 @@ test('auto forge stops at the reserve', async () => {
   const forges = srv.calls.filter((c) => c.path === '/game/forge');
   assert.ok(forges.length >= 1 && forges.length <= 4);
   assert.ok(srv.state.balances.LM >= 16000);
+});
+
+test('forge only keeper gear: epic+, legendary+ once the set is full legendary', async () => {
+  const { forgeFloor } = await import('../src/autopilot.js');
+  const EPIC = CAT.rarities.indexOf('epic'); const LEG = CAT.rarities.indexOf('legendary');
+  const eq = { weapon: 'crystal_dirk@10', boots: 'mithril_sabatons', helmet: 'shadow_hood@6' };
+  assert.equal(forgeFloor(eq), EPIC);
+  assert.equal(forgeTarget(eq, forgeFloor(eq)), 'mithril_sabatons', 'rare hood skipped, lowest epic first');
+  const legend = Object.fromEntries(CAT.slots.map((sl) => [sl, CAT.items.find((i) => i.slot === sl && i.rarity === 'legendary' && (sl !== 'weapon' || i.weaponType === 'dagger')).id]));
+  assert.equal(forgeFloor(legend), LEG);
+  legend.boots = 'mithril_sabatons';
+  assert.equal(forgeFloor(legend), EPIC, 'one epic left: still epic floor');
+  assert.equal(forgeTarget(legend, LEG) !== 'mithril_sabatons', true);
 });
 
 test('forgeTarget picks the lowest + level, weapon first on ties', () => {

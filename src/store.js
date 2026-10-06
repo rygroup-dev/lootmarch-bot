@@ -37,9 +37,10 @@ export const DEFAULT_SETTINGS = {
   upgradeShare: 0.5,      // ...spending at most this share of the game $LM balance per round
   autoTravel: true,       // walk the hero onto a newly opened floor
   autoSeal: true,         // break the next floor seal once the floor is cleared and it is affordable
-  autoForge: false,       // spends $LM + Bone, so it is opt-in
-  forgeReserveLm: 5000,   // never forge below this much $LM
-  forgeReserveBone: 200,  // ...or this much Bone
+  autoForge: false,       // spends $LM + Bone, so it is opt-in; epic+ gear only (legendary+ once all slots are)
+  autoFeedPet: false,     // level the active pet with Bone, epic+ pets only
+  forgeReserveLm: 5000,   // never forge/feed below this much $LM
+  forgeReserveBone: 1000, // ...or this much Bone (kept for floor seals)
   autoDaily: true,        // claim finished missions, daily board and login streak
   autoPass: true,         // claim reached March Pass tiers
   alertLive: true,        // warn when $LM is held by the human check

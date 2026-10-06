@@ -1,5 +1,5 @@
 import { ApiError } from './api.js';
-import { itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, heroPower, regionName } from './catalog.js';
+import { CAT, itemInfo, itemLabel, RARITY_RANK, ZONES_PER_FLOOR, sealCost, isPetId, petInfo, petProgress, heroPower, regionName } from './catalog.js';
 import { BUILDS, resolveBuild } from './game.js';
 
 const H = 3600 * 1000;
@@ -242,18 +242,34 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
   await step('Forge', async () => {
     if (!s.autoForge) return;
     let done = 0;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 20; i++) { // +1 costs ~50 $LM + 45 Bone (verified), growing per level
       const lm = st.balances?.LM || 0;
       const bone = st.balances?.Bone || 0;
       if (lm <= s.forgeReserveLm || bone <= s.forgeReserveBone) break;
-      const target = forgeTarget(st.equipped || {});
+      const target = forgeTarget(st.equipped || {}, forgeFloor(st.equipped || {}));
       if (!target) break;
-      try { await game.forge(target, 1); } catch { break; } // usually: not enough materials
+      // the first failure is reported; later ones just mean materials ran out
+      try { await game.forge(target, 1); } catch (e) { if (!done) throw e; break; }
       const after = game.last || st;
       if ((after.balances?.LM || 0) < s.forgeReserveLm || (after.balances?.Bone || 0) < s.forgeReserveBone) { st = after; done++; break; }
       st = after; done++;
     }
-    if (done) log.push(`🔨 Forge ${done}× (gear terpasang dengan level + paling rendah).`);
+    if (done) log.push(`🔨 Forge ${done}×: ${Object.values(st.equipped || {}).filter((id) => itemInfo(id).plus && (RARITY_RANK[itemInfo(id).rarity] ?? 0) >= forgeFloor(st.equipped || {})).map((id) => itemLabel(id, { short: true })).join(', ')}`);
+  });
+
+  // Pets: only epic or better are levelled (Bone + 1 $LM per Bone), up to the next level per round.
+  await step('Pet', async () => {
+    if (!s.autoFeedPet) return;
+    const id = st.pets?.activePet;
+    if (!id || (RARITY_RANK[petInfo(id).rarity] ?? 0) < RARITY_RANK.epic) return;
+    const own = (st.pets.owned || []).find((p) => p.petId === id);
+    const pg = petProgress(own?.xp || 0);
+    if (pg.max) return;
+    const bone = Math.min(pg.boneToNext, (st.balances?.Bone || 0) - s.forgeReserveBone, (st.balances?.LM || 0) - s.forgeReserveLm);
+    if (bone < 50) return;
+    await game.feedPet(id, Math.floor(bone));
+    st = game.last || st;
+    log.push(`🐾 ${petInfo(id).name} diberi ${fmt(bone)} Bone → Lv ${petProgress(((st.pets.owned || []).find((p) => p.petId === id) || {}).xp || 0).level}`);
   });
 
   await step('Quest', async () => {
@@ -358,13 +374,19 @@ export function revealed(r) {
 }
 
 // Cheapest upgrade first: equipped item with the lowest + level, weapon wins ties.
-export function forgeTarget(equipped) {
+// Forge only keeper gear: epic or better, or legendary+ once every slot is legendary+.
+export function forgeFloor(equipped) {
+  const ranks = CAT.slots.map((sl) => (equipped[sl] ? RARITY_RANK[itemInfo(equipped[sl]).rarity] ?? 0 : -1));
+  return ranks.every((r) => r >= RARITY_RANK.legendary) ? RARITY_RANK.legendary : RARITY_RANK.epic;
+}
+
+export function forgeTarget(equipped, minRank = 0) {
   let best = null;
   for (const slot of SLOT_ORDER) {
     const id = equipped[slot];
     if (!id) continue;
     const info = itemInfo(id);
-    if (info.kind !== 'gear' || info.plus >= 60) continue;
+    if (info.kind !== 'gear' || info.plus >= 60 || (RARITY_RANK[info.rarity] ?? 0) < minRank) continue;
     if (!best || info.plus < best.plus) best = { id, plus: info.plus };
   }
   return best?.id || null;
