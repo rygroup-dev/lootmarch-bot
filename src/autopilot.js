@@ -113,23 +113,23 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     log.push(`🎁 Loot diklaim: ${gainText(before, st) || '+' + fmt(res.claimed?.bone) + ' Bone'}`);
   });
 
-  await step('Chest', async () => {
+  // Open every chest / pet chest in the bag (loot, quests, pass rewards). Used
+  // early in the round and again right after quest/pass claims.
+  const openChests = async (label) => {
     if (!s.autoChest) return;
-    const got = [];
+    const before = st;
+    let opened = 0;
     for (const [id, qty] of Object.entries(st.items || {})) {
       if (!id.startsWith('chest_') || !(qty > 0)) continue;
-      for (let i = 0; i < Math.min(qty, 10); i++) {
-        const r = await game.openChest(id);
-        got.push(...revealed(r));
-        newGear++;
-      }
+      for (let i = 0; i < Math.min(qty, 10); i++) { await game.openChest(id); opened++; newGear++; }
     }
     for (const [type, qty] of Object.entries((game.last || st).petChests || {})) {
-      for (let i = 0; i < Math.min(qty || 0, 10); i++) got.push(...revealed(await game.openPetChest(type)));
+      for (let i = 0; i < Math.min(qty || 0, 10); i++) { await game.openPetChest(type); opened++; }
     }
     st = game.last || st;
-    if (got.length) log.push('📦 Chest dibuka: ' + got.map((x) => (isPetId(x) ? '🐾 ' + petInfo(x).name : itemLabel(x, { short: true }))).join(', '));
-  });
+    if (opened) log.push(`📦 ${label} (${opened}): ${gainText(before, st) || 'dibuka'}`);
+  };
+  await step('Chest', () => openChests('Chest dibuka'));
 
   // Equip by policy (highest rarity first, then Power) instead of the server's
   // "Equip best", which prefers a +17 rare over a fresh epic that will outgrow it.
@@ -350,6 +350,7 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     const got = await game.claimDailyAll();
     st = game.last || st;
     if (got.length) log.push(`📜 Quest diklaim: ${got.join(', ')} → ${gainText(before, st) || 'hadiah masuk'}`);
+    if (got.length) await openChests('Chest hadiah quest dibuka');
   });
 
   // Daily nudge for "Share your run" (5,000 $LM). Posting stays a human tap.
@@ -381,7 +382,10 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     const before = game.last || st;
     const { pass: p, claimed } = await game.claimPassIfAny();
     st = game.last || st;
-    if (claimed) log.push(`🎫 Hadiah March Pass diklaim: ${gainText(before, st) || 'hadiah masuk'}`);
+    if (claimed) {
+      log.push(`🎫 Hadiah March Pass diklaim${p.premium ? ' (♛ free + premium)' : ''}: ${gainText(before, st) || 'hadiah masuk'}`);
+      await openChests('Chest hadiah pass dibuka');
+    }
     // Premium can be bought late: reached tiers pay out at once. Remind when it is time.
     const sid = p.season?.id;
     const endsIn = (p.season?.end || 0) - now / 1000;

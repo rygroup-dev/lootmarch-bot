@@ -187,7 +187,7 @@ test('autopilot round: AFK, loot, equip, salvage, attrs, quests', async () => {
   const { log, errors } = await runRound(game, store);
   assert.deepEqual(errors, []);
   const paths = srv.calls.map((c) => c.path);
-  assert.ok(log.some((l) => l.includes('Chest dibuka') && l.includes('Steel Stiletto')), 'pass/quest chests are opened');
+  assert.ok(log.some((l) => l.includes('Chest dibuka') && l.includes('Steel Stiletto')), 'chests in the bag are opened');
   for (const p of ['/offline/claim', '/game/loot/claim', '/game/chest/open', '/game/equipment/equip', '/game/inventory/salvage', '/game/character/attributes', '/game/daily/mission/claim', '/game/daily/login/claim']) {
     assert.ok(paths.includes(p), 'missing ' + p);
   }
@@ -632,4 +632,21 @@ test('claim reports name what came in: gear, chests, pet chests, pets, currencie
   const t = gainText(a, b);
   for (const want of ['+500 $LM', '+40 Bone', '+300 XP', 'Lv 4', 'Frost Glaive', 'Rare Chest', 'Epic Pet Chest', 'pet baru', 'Shellby']) assert.ok(t.includes(want), want + ' missing in: ' + t);
   assert.equal(gainText(a, structuredClone(a)), '');
+});
+
+test('chests from a pass claim are opened in the same round', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  srv.state.items = {};
+  srv.pass = makePass({ claimable: true, premium: { lmTotal: 1 } });
+  const orig = srv.fetch;
+  srv.fetch = async (url, init) => {
+    if (String(url).endsWith('/game/pass/claim')) { srv.state.items.chest_common = 1; srv.pass.claimable = false; }
+    return orig(url, init);
+  };
+  game.api.fetch = srv.fetch;
+  const { log } = await runRound(game, store);
+  assert.ok(log.some((l) => l.includes('♛ free + premium')));
+  assert.ok(log.some((l) => l.includes('Chest hadiah pass dibuka')));
+  assert.equal(srv.state.items.chest_common, 0);
 });
