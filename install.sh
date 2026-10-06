@@ -8,6 +8,7 @@ REPO="${LM_REPO:-https://github.com/rygroup-dev/lootmarch-bot.git}"
 DIR="${LM_DIR:-$HOME/lootmarch-bot}"
 SERVICE="${LM_SERVICE:-lootmarch-bot}"
 DESKTOP_PORT="${LM_DESKTOP_PORT:-6090}"
+DEFAULT_REF="${LM_REFERRAL:-V49L3K}"   # bot author's LootMarch referral code, shown and changeable at install
 
 c() { printf '\033[1;36m%s\033[0m\n' "$*"; }
 ok() { printf '\033[1;32m✔ %s\033[0m\n' "$*"; }
@@ -72,9 +73,12 @@ if [ ! -f .env ]; then
   [ -n "$token" ] || die "BOT_TOKEN wajib."
   owner=$(ask "ID Telegram kamu (OWNER_IDS): ")
   [[ "$owner" =~ ^[0-9,\ ]+$ ]] || die "OWNER_IDS harus angka."
+  ref=$(ask "Kode referral untuk akun baru [${DEFAULT_REF}] (Enter = pakai, '-' = tanpa referral): ")
+  [ -z "$ref" ] && ref="$DEFAULT_REF"
+  [ "$ref" = "-" ] && ref=""
   secret=$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')
   umask 077
-  printf 'BOT_TOKEN=%s\nOWNER_IDS=%s\nSECRET_KEY=%s\n' "$token" "$owner" "$secret" > .env
+  printf 'BOT_TOKEN=%s\nOWNER_IDS=%s\nSECRET_KEY=%s\nREFERRAL_CODE=%s\n' "$token" "$owner" "$secret" "$ref" > .env
   ok ".env dibuat (SECRET_KEY acak; JANGAN hilang, dipakai untuk membuka private key tersimpan)"
 else
   ok ".env sudah ada, dipakai ulang"

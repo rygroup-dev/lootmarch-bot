@@ -18,6 +18,8 @@ export function loadConfig(env = process.env) {
     tickSeconds: Math.max(60, Number(env.TICK_SECONDS || 300)),
     feedSeconds: Math.max(30, Number(env.FEED_SECONDS || 60)),
     desktopUrl: env.DESKTOP_URL || '', // optional remote browser (noVNC) where the game tab runs
+    // referral code applied to a NEW account (chosen at install; README discloses the default)
+    referralCode: (env.REFERRAL_CODE || '').trim().toUpperCase(),
   };
   const missing = [];
   if (!cfg.botToken) missing.push('BOT_TOKEN');

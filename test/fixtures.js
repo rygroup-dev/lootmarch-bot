@@ -52,7 +52,7 @@ export function makePass(over = {}) {
 // Minimal in-memory LootMarch server for fetch().
 export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', requireCaptcha = false } = {}) {
   const calls = [];
-  const srv = { hold: { required: 20000, ok: true, holds: 550000, verified: true, checkedAt: 1 }, listings: [
+  const srv = { referral: { code: 'ABC123', cut: 0.05, welcomeBonus: 600, referrer: null, welcomePaid: false, canBind: true, earned: 0, referred: [] }, hold: { required: 20000, ok: true, holds: 550000, verified: true, checkedAt: 1 }, listings: [
     { id: 'L1', itemId: 'bronze_sabre', price: 400, at: 1, petXp: null, seller: 'X' },          // sword: wrong class for a dagger hero
     { id: 'L2', itemId: 'hide_brigandine', price: 74, at: 1, petXp: null, seller: 'Y' },        // armor slot is empty
     { id: 'L3', itemId: 'nightshade_stiletto', price: 9e9, at: 1, petXp: null, seller: 'Z' },   // too expensive
@@ -141,6 +141,10 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
       case '/game/daily/mission/claim': srv.daily.missions.find((m) => m.id === body.missionId).claimed = true; return wrap();
       case '/game/daily/login/claim': srv.daily.login.claimedToday = true; return wrap();
       case '/game/daily/board/claim': srv.daily.board.claimed = true; return wrap();
+      case '/game/referral': return json(200, srv.referral);
+      case '/game/referral/bind':
+        if (!srv.referral.canBind) return json(400, { error: 'NoBind', message: 'Already bound.' });
+        srv.referral = { ...srv.referral, referrer: body.code, canBind: false }; return json(200, { success: true });
       case '/game/x-link/start': return json(200, { url: 'https://x.com/i/oauth2/authorize?state=abc' }, { 'set-cookie': 'lm_wlr_oauth=pkce1; Path=/api/prelaunch; HttpOnly' });
       case '/prelaunch/x/callback':
         if (!cookie.includes('lm_wlr_oauth=pkce1') || u.searchParams.get('state') !== 'abc') return json(400, { error: 'bad_state' });

@@ -73,7 +73,7 @@ export function homeView(st, { live, online, autopilot, daily, pass, lastRun, ne
     .text('📜 Quest', 'nav:quest').text('🎫 Pass', 'nav:pass').text('🗺 Travel', 'nav:travel').row()
     .text('🐾 Pet', 'nav:pet').text('🛒 Shop', 'nav:shop').text('🏪 Market', 'nav:mk:all:all:0').row()
     .text('💰 Wallet', 'nav:wallet').text('📖 Codex', 'nav:codex').text('🏆 Ranks', 'nav:ranks').row()
-    .text('🤖 Jalankan autopilot', 'auto:run').text('📋 Log', 'nav:log').row()
+    .text('🤖 Jalankan autopilot', 'auto:run').text('📋 Log', 'nav:log').text('👥 Referral', 'nav:ref').row()
     .text('⚙️ Setelan', 'nav:set').text('🔄 Refresh', 'nav:refresh');
   if (desktopUrl) kb.row().url('🖥 Buka layar game (VPS)', desktopUrl);
   // play in a phone browser that has a wallet: plain link, or MetaMask's in-app browser
@@ -589,6 +589,22 @@ export function shareView(cm = {}, texts = []) {
     } else if (cm.status === 'APPROVED') lines.push('', 'Sudah beres hari ini. Reset 00:00 UTC (07:00 WIB).');
   }
   return { text: lines.join('\n'), kb: back(kb, 'quest') };
+}
+
+// ---------------------------------------------------------------- referral (opt-in, nothing hidden)
+export const refLink = (code) => `https://lootmarch.xyz/play?ref=${encodeURIComponent(code)}`;
+export function referralView(r) {
+  const lines = ['👥 <b>Referral</b>', '',
+    `Kode kamu: <code>${esc(r.code)}</code>`,
+    `Link: <code>${esc(refLink(r.code))}</code>`, '',
+    `Teman baru yang daftar pakai kode/link ini dapat <b>${n(r.welcomeBonus)} $LM</b>, kamu dapat <b>${Math.round((r.cut || 0) * 100)}%</b> dari $LM yang mereka hasilkan (dibayar game, tidak memotong teman).`,
+    `Penghasilan referral: <b>${n(r.earned)} $LM</b> · teman: ${(r.referred || []).length}`];
+  for (const f of (r.referred || []).slice(0, 10)) lines.push(`  • ${esc(f.name || f.nick || '?')}${f.earned != null ? ` — ${n(f.earned)} $LM` : ''}`);
+  lines.push('', r.referrer ? `Kamu diundang oleh: ${esc(r.referrer)}` : (r.canBind ? 'Kamu belum memakai kode siapa pun (masih bisa diisi).' : ''));
+  lines.push('<i>Aturan game: 1 orang = 1 akun. Bagikan ke teman sungguhan saja.</i>');
+  const kb = new InlineKeyboard();
+  if (r.canBind) kb.text('🔑 Isi kode referral teman', 'ref:bind').row();
+  return { text: lines.filter((l) => l !== '').join('\n'), kb: back(kb) };
 }
 
 export function confirmKb(token) {

@@ -244,6 +244,11 @@ export function createBot({ cfg, store, game, autopilot }) {
   }));
   bot.callbackQuery('share:submit', h(async (ctx) => ask(ctx, 'share', '📎 Tempel link post X kamu (contoh <code>https://x.com/username/status/123…</code>).')));
 
+  // ------------------------------------------------------------ referral (opt-in)
+  bot.callbackQuery('nav:ref', h(async (ctx) => { needLogin(); await show(ctx, V.referralView(await game.call((a) => a.referral()))); }));
+  bot.callbackQuery('ref:bind', h(async (ctx) => ask(ctx, 'ref', '🔑 Ketik kode referral teman kamu (contoh <code>V49L3K</code>), atau /batal untuk melewati.')));
+  bot.callbackQuery('ref:skip', h(async (ctx) => home(ctx)));
+
   // ------------------------------------------------------------ new hero
   bot.callbackQuery('new:start', h(async (ctx) => { needLogin(); await show(ctx, V.newHeroClassView()); }));
   bot.callbackQuery(/^new:class:(\w+)$/, h(async (ctx) => {
@@ -268,6 +273,13 @@ export function createBot({ cfg, store, game, autopilot }) {
     store.addLog(`Hero dibuat: ${d.nick} (${d.classId})`, 'manual');
     drafts.delete(ctx.chat.id);
     await say(ctx, `🎉 Hero <b>${esc(d.nick)}</b> (${d.classId.toUpperCase()}) siap berpetualang! Autopilot mulai mengurus loot, quest & attribute.`);
+    const applied = await game.applyReferral().catch(() => null);
+    if (applied) { await say(ctx, `👥 Kode referral <code>${esc(applied.code)}</code> (diatur saat install) dipakai: bonus ${V.n(applied.bonus)} $LM dari game.`); return home(ctx); }
+    const ref = await game.call((a) => a.referral()).catch(() => null);
+    if (ref?.canBind) {
+      return show(ctx, { text: `👥 <b>Punya kode referral teman?</b> (opsional)\nKamu dapat bonus ${V.n(ref.welcomeBonus)} $LM, temanmu dapat ${Math.round((ref.cut || 0) * 100)}% dari $LM yang kamu hasilkan (dibayar game, tidak memotong punyamu).`,
+        kb: new InlineKeyboard().text('🔑 Isi kode', 'ref:bind').text('Lewati', 'ref:skip') });
+    }
     await home(ctx);
   }));
 
@@ -603,6 +615,14 @@ export function createBot({ cfg, store, game, autopilot }) {
         store.addLog(`Share X dikirim: ${t.url}`, 'manual');
         await say(ctx, `✅ Post dikirim untuk review.\nStatus: ${V.shareStatusText(r?.daily?.community || {})}`);
         return shareScreen(ctx);
+      }
+      case 'ref': {
+        const code = text.replace(/^.*[?&]ref=/i, '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{4,12}$/.test(code)) throw new Error('Kode tidak valid (huruf/angka, contoh V49L3K).');
+        await game.call((a) => a.bindReferral(code));
+        store.addLog(`Kode referral dipakai: ${code}`, 'manual');
+        await say(ctx, `✅ Kode referral <code>${esc(code)}</code> dipakai.`);
+        return show(ctx, V.referralView(await game.call((a) => a.referral())));
       }
       case 'nick': {
         const nick = cleanNick(text);

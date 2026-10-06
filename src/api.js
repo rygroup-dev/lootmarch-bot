@@ -116,7 +116,9 @@ export class LootMarchApi {
   daily() { return this.get('/game/daily'); }
   pass() { return this.get('/game/pass'); }
   leaderboard() { return this.get('/game/leaderboard'); }
+  // -> { code, cut, welcomeBonus, referrer, welcomePaid, canBind, earned, referred[] }
   referral() { return this.get('/game/referral'); }
+  bindReferral(code) { return this.post('/game/referral/bind', { code }); }
   feed(after = 0) { return this.get('/game/feed?after=' + (after | 0)); }
   waitlistReward() { return this.get('/game/waitlist-reward'); }
   startWaitlistReward() { return this.post('/game/waitlist-reward/start', {}); }

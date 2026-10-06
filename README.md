@@ -98,9 +98,13 @@ Hadiah AFK = **75% dari rate online kamu sendiri** (24 jam terakhir), maksimal 8
 - Sesi login diurus otomatis: kalau habis, bot login ulang sendiri pakai key. (Cadangan darurat: kalau suatu saat server minta captcha, login di browser lalu kirim header Cookie lewat `/cookie`.)
 - **Pakai wallet khusus game**, jangan wallet utama.
 
+## Referral
+
+Saat install kamu ditanya **kode referral** untuk akun LootMarch baru. Bawaannya **`V49L3K`** (kode pembuat bot ini): tekan Enter untuk memakainya, ketik kode lain, atau ketik `-` untuk tanpa referral. Kalau dipakai, game memberi akun barumu bonus **600 $LM** dan pemilik kode mendapat 5% dari $LM yang kamu hasilkan; itu dibayar game, **tidak memotong** penghasilanmu. Kode hanya dipasang ke akun yang masih baru (server yang menentukan) dan bisa diubah di `.env` (`REFERRAL_CODE`). Kode milikmu sendiri ada di menu 👥 Referral.
+
 ## Penting
 
-- Docs LootMarch melarang botting dan multi-akun, dan pelanggarannya bisa berujung ban. Bot ini dibuat untuk **1 orang = 1 akun**, dan risiko pemakaian ditanggung masing-masing.
+- Docs LootMarch melarang botting dan multi-akun, dan pelanggarannya bisa berujung ban. Bot ini dibuat untuk **1 orang = 1 akun** (termasuk untuk referral), dan risiko pemakaian ditanggung masing-masing.
 - Proyek independen, tidak berafiliasi dengan LootMarch.
 
 ## Pengembangan

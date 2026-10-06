@@ -48,7 +48,7 @@ test('every menu opens without errors', async () => {
   const h = await harness();
   await h.text('/start');
   assert.match(h.lastText(), /TestHero/);
-  const routes = ['nav:home', 'nav:refresh', 'nav:log', 'auto:run', 'upg:plan', 'nav:hero', 'nav:inv:0', 'nav:loot', 'afk:prev', 'nav:quest', 'nav:pass', 'pass:calc', 'nav:travel', 'nav:travel:1', 'nav:pet', 'pet:v:leafhopper:common', 'nav:shop', 'shop:c:chest_epic', 'shop:p:common', 'nav:codex', 'nav:ranks', 'nav:set', 'hero:build', 'salv:menu', 'nav:mk:all:all:0', 'nav:mk:rare:weapon:0', 'mk:v:L1', 'mk:mine', 'mk:hist', 'it:v:bronze_stiletto@2', 'it:v:chest_common'];
+  const routes = ['nav:home', 'nav:ref', 'nav:refresh', 'nav:log', 'auto:run', 'upg:plan', 'nav:hero', 'nav:inv:0', 'nav:loot', 'afk:prev', 'nav:quest', 'nav:pass', 'pass:calc', 'nav:travel', 'nav:travel:1', 'nav:pet', 'pet:v:leafhopper:common', 'nav:shop', 'shop:c:chest_epic', 'shop:p:common', 'nav:codex', 'nav:ranks', 'nav:set', 'hero:build', 'salv:menu', 'nav:mk:all:all:0', 'nav:mk:rare:weapon:0', 'mk:v:L1', 'mk:mine', 'mk:hist', 'it:v:bronze_stiletto@2', 'it:v:chest_common'];
   for (const r of routes) {
     await h.press(r);
     assert.deepEqual(h.errors().map((e) => e.payload.text), [], r);
@@ -116,6 +116,10 @@ test('fresh account: pick class, type name, create hero', async () => {
   assert.match(h.lastText(), /RyMage/);
   await h.press('new:look:rand');
   await h.press('new:go');
+  assert.match(h.lastText(), /kode referral teman/, 'optional referral prompt after creating a hero');
+  await h.press('ref:bind');
+  await h.text('https://lootmarch.xyz/play?ref=v49l3k');
+  assert.equal(h.srv.referral.referrer, 'V49L3K');
   assert.equal(h.srv.state.character.classId, 'wand');
   assert.equal(h.srv.state.character.appearance.nick, 'RyMage');
   assert.deepEqual(h.errors(), []);
@@ -165,4 +169,20 @@ test('share your run: link X, wrong account refused, right post submitted', asyn
   await h.text('https://twitter.com/ryhood/status/222?s=20');
   assert.equal(h.srv.daily.community.status, 'PENDING_REVIEW');
   assert.equal(h.srv.daily.community.tweetUrl, 'https://x.com/ryhood/status/222');
+});
+
+test('referral from install config is applied once to a fresh account and announced', async () => {
+  const h = await harness();
+  h.game.cfg.referralCode = 'V49L3K';
+  h.srv.state.character = { userId: '0x1' };
+  h.game.last = null;
+  await h.text('/start');
+  await h.press('new:class:wand');
+  await h.text('RyMage');
+  await h.press('new:go');
+  assert.equal(h.srv.referral.referrer, 'V49L3K');
+  assert.ok(h.sent.some((x) => /V49L3K.*dipakai/.test(x.payload.text || '')));
+  const binds = h.srv.calls.filter((c) => c.path === '/game/referral/bind').length;
+  await h.press('nav:home');
+  assert.equal(h.srv.calls.filter((c) => c.path === '/game/referral/bind').length, binds, 'only once');
 });

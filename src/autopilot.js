@@ -26,6 +26,10 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     return { log, errors };
   }
   if (store.cursor('heroAlert')) store.setCursor('heroAlert', 0);
+  await step('Referral', async () => {
+    const r = await game.applyReferral();
+    if (r) log.push(`👥 Kode referral <code>${r.code}</code> (diatur saat install) dipakai: bonus ${fmt(r.bonus)} $LM dari game.`);
+  });
 
   // Track online play (rooms cleared today, deepest region) to spot an active
   // browser, report room/hour and notice a hero stuck at a boss.

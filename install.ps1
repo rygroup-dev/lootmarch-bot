@@ -71,8 +71,12 @@ try {
     if (-not $token) { Fail 'BOT_TOKEN wajib.' }
     $owner = Read-Host 'ID Telegram kamu (OWNER_IDS)'
     if ($owner -notmatch '^[0-9, ]+$') { Fail 'OWNER_IDS harus angka.' }
+    $defRef = 'V49L3K'  # bot author's LootMarch referral code, shown and changeable here
+    $ref = Read-Host "Kode referral untuk akun baru [$defRef] (Enter = pakai, '-' = tanpa referral)"
+    if (-not $ref) { $ref = $defRef }
+    if ($ref -eq '-') { $ref = '' }
     $secret = node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-    Set-Content -Path $envFile -Encoding ascii -Value @("BOT_TOKEN=$token", "OWNER_IDS=$owner", "SECRET_KEY=$secret")
+    Set-Content -Path $envFile -Encoding ascii -Value @("BOT_TOKEN=$token", "OWNER_IDS=$owner", "SECRET_KEY=$secret", "REFERRAL_CODE=$ref")
     # only the current user may read .env
     icacls $envFile /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
     Ok '.env dibuat (SECRET_KEY acak; JANGAN hilang, dipakai untuk membuka private key tersimpan)'

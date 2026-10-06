@@ -263,6 +263,17 @@ export class Game {
     return this.state();
   }
 
+  // Apply the configured referral code once, only if the server still allows it (new accounts).
+  async applyReferral() {
+    const code = this.cfg.referralCode;
+    if (!code || !/^[A-Z0-9]{4,12}$/.test(code) || this.store.cursor('refApplied')) return null;
+    const r = await this.call((a) => a.referral());
+    if (!r?.canBind || r.referrer || r.code === code) { this.store.setCursor('refApplied', 1); return null; }
+    await this.call((a) => a.bindReferral(code));
+    this.store.setCursor('refApplied', 1);
+    return { code, bonus: r.welcomeBonus };
+  }
+
   equipBest() { return this.act((a) => a.equipBest()); }
   equip(itemId) { return this.act((a) => a.equip(itemId)); }
   unequip(slot) { return this.act((a) => a.unequip(slot)); }
