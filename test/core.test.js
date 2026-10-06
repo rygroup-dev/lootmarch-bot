@@ -485,7 +485,7 @@ test('stalled browser is reported once, then clears when rooms resume', async ()
   assert.ok(!p.stalled, 'never active = AFK only, no alarm');
 });
 
-test('stale listings: uncommon pulled and salvaged, rare repriced under a cheaper rival', async () => {
+test('stale listings (24 h) are pulled and salvaged, whatever the rarity', async () => {
   const { srv, store, game } = setup();
   await game.login();
   store.setSetting('autoUpgrade', false);
@@ -494,14 +494,13 @@ test('stale listings: uncommon pulled and salvaged, rare repriced under a cheape
   srv.state.market = [
     { id: 'u1', itemId: 'frost_glaive', price: 388, at: old },
     { id: 'r1', itemId: 'steel_sabre', price: 9000, at: old },
+    { id: 'n1', itemId: 'steel_sabre', price: 9000, at: Math.floor(Date.now() / 1000) - 3600 },
   ];
-  srv.listings.push({ id: 'c1', itemId: 'steel_sabre', price: 4000, at: 1, seller: 'Rival' });
   const { log } = await runRound(game, store);
-  assert.ok(srv.calls.some((c) => c.path === '/game/inventory/destroy' && c.body.itemId === 'frost_glaive'));
-  const relist = srv.calls.filter((c) => c.path === '/game/market/list').map((c) => c.body);
-  assert.deepEqual(relist, [{ itemId: 'steel_sabre', price: 2999, actionId: relist[0].actionId }], 'one under the cheapest rival (3,000)');
-  assert.ok(log.some((l) => l.includes('Harga disesuaikan')));
-  assert.ok(!log.some((l) => l.includes('Terjual')), 'cancelled listings are not reported as sold');
+  const destroyed = srv.calls.filter((c) => c.path === '/game/inventory/destroy').map((c) => c.body.itemId);
+  assert.ok(destroyed.includes('frost_glaive') && destroyed.includes('steel_sabre'));
+  assert.ok(srv.state.market.some((l) => l.id === 'n1'), 'a fresh listing stays');
+  assert.ok(!log.some((l) => l.includes('Terjual')), 'pulled listings are not reported as sold');
 });
 
 test('forge running out of Bone is quiet, not an error', async () => {

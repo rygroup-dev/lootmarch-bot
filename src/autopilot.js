@@ -175,26 +175,16 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
 
     if (!s.autoSell) return;
 
-    // Stale listings (24 h unsold): cheap ones go back for salvage, rare+ follow
-    // the cheapest competing price (never below salvage value).
-    const { listings: market } = await game.cached('market:all', 30000, () => game.market({}));
+    // Stale listings (24 h unsold): pull them and salvage for Bone, any rarity.
+    // Mostly +0 copies sell; what has not moved in a day is unlikely to.
     const nowSec = now / 1000;
     for (const l of st.market || []) {
-      if (!l.at || nowSec - l.at < 24 * 3600) continue;
-      const rank = RARITY_RANK[itemInfo(l.itemId).rarity] ?? 0;
-      const others = market.filter((x) => x.itemId === l.itemId && x.id !== l.id).map((x) => x.price);
-      const target = rank <= s.salvageLevel ? 0 : sellPrice(l.itemId, market.filter((x) => x.id !== l.id));
-      if (rank > s.salvageLevel && (!others.length || target >= l.price)) continue; // already the cheapest
+      if (!l.at || nowSec - l.at < 24 * 3600 || isPetId(l.itemId)) continue;
       await game.marketCancel(l.id);
       store.setCursor('cancelledListings', [...store.cursor('cancelledListings', []), l.id]);
+      await game.salvageOne(l.itemId);
       st = game.last || st;
-      if (rank <= s.salvageLevel) {
-        await game.salvageOne(l.itemId); st = game.last || st;
-        log.push(`♻️ Tidak laku 24 jam, ditarik & di-salvage: ${itemLabel(l.itemId, { short: true })}`);
-      } else if (target) {
-        await game.marketList(l.itemId, target); st = game.last || st;
-        log.push(`🏷 Harga disesuaikan: ${itemLabel(l.itemId, { short: true })} ${fmt(l.price)} → ${fmt(target)} $LM`);
-      }
+      log.push(`♻️ Tidak laku 24 jam, ditarik & di-salvage: ${itemLabel(l.itemId, { short: true })}`);
     }
     snapshot();
 
