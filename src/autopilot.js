@@ -256,7 +256,8 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
       if (s.autoSeal && lm >= cost.lm && bone >= cost.bone) {
         await game.unlockFloor(next);
         st = game.last || st; pr = st.progress || pr;
-        log.push(`🔓 <b>Seal Floor ${next} dibuka!</b> (−${fmt(cost.lm)} $LM, −${fmt(cost.bone)} Bone). Musuh lebih kuat, hadiah ×1,5.`);
+        const where = game.cfg?.desktopUrl ? `<a href="${game.cfg.desktopUrl}">layar game</a>` : 'layar game';
+        log.push(`🔓 <b>Seal Floor ${next} dibuka!</b> (−${fmt(cost.lm)} $LM, −${fmt(cost.bone)} Bone). Musuh lebih kuat, hadiah ×1,5.\nKalau di ${where} masih ada popup "Floor ${next} is sealed": klik <b>Not now</b> (seal sudah dibayar), lalu refresh halaman.`);
       } else if (store.cursor('sealAlert') !== next) {
         store.setCursor('sealAlert', next);
         log.push(`🏁 Floor ${unlocked} sudah clear semua! Seal Floor ${next} butuh ${fmt(cost.lm)} $LM + ${fmt(cost.bone)} Bone (kamu: ${fmt(lm)} / ${fmt(bone)}).`);
