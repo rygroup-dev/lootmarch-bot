@@ -456,3 +456,17 @@ test('market: uncommon listed with a slot kept for rare, sales reported', async 
   const r = await runRound(game, store);
   assert.ok(r.log.some((l) => l.includes('Terjual') && l.includes('Iron Sword')));
 });
+
+test('stalled browser is reported once, then clears when rooms resume', async () => {
+  const { recordProgress } = await import('../src/autopilot.js');
+  const store = new Store(tmp(), SECRET);
+  const M = 60e3; const t0 = Date.now() - 120 * M;
+  let p;
+  for (let i = 0; i <= 18; i++) p = recordProgress(store, { at: t0 + i * 5 * M, rooms: Math.min(i, 12) * 10, depth: 7, zone: 7, floor: 1 });
+  assert.ok(p.stalled, 'rooms stopped for 30 min after being active');
+  p = recordProgress(store, { at: t0 + 19 * 5 * M, rooms: 130, depth: 7, zone: 7, floor: 1 });
+  assert.ok(!p.stalled && p.activeRecently);
+  const quiet = new Store(tmp(), SECRET);
+  for (let i = 0; i <= 18; i++) p = recordProgress(quiet, { at: t0 + i * 5 * M, rooms: 0, depth: 0, zone: 0, floor: 1 });
+  assert.ok(!p.stalled, 'never active = AFK only, no alarm');
+});

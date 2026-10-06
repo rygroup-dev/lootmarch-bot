@@ -56,6 +56,16 @@ export async function runRound(game, store, { now = Date.now() } = {}) {
     if (lv.valid && left > 6 * 60) store.setCursor('liveAlertKey', '');
   });
 
+  // The game tab stopped clearing rooms (wallet popup locked, captcha, crash…).
+  await step('Stalled', async () => {
+    if (!prog) return;
+    if (!prog.stalled) { if (prog.activeRecently) store.setCursor('stallAlert', 0); return; }
+    if (store.cursor('stallAlert')) return;
+    store.setCursor('stallAlert', now);
+    const where = game.cfg?.desktopUrl ? `<a href="${game.cfg.desktopUrl}">layar game</a>` : 'game di browser';
+    log.push(`⛔ <b>Game berhenti</b>: tidak ada room 20 menit terakhir. Buka ${where} dan cek: wallet terkunci (unlock), captcha, atau tombol yang menunggu diklik.`);
+  });
+
   await step('Stuck', async () => {
     if (!prog?.stuck) return;
     if (store.cursor('stuckDepth') === prog.depth) return;
@@ -313,11 +323,16 @@ export function progressStats(list, now = Date.now()) {
   // stuck: 3 h+ of steady clearing (≥ 120 rooms) without a deeper region
   const old = list.find((x) => now - x.at >= 3 * H && now - x.at <= 3.5 * H) || (now - list[0].at >= 3 * H ? list[0] : null);
   const stuckRooms = old ? cur.rooms - old.rooms : 0;
+  // stalled: the browser was clearing rooms in the last 6 h but nothing for 20 min
+  const m20 = since(H / 3);
+  const h6 = list.find((x) => now - x.at <= 6 * H) || cur;
+  const stalled = cur.at - m20.at >= 15 * 60e3 && cur.rooms === m20.rooms && m20.rooms > h6.rooms;
   return {
     ...cur,
     roomsPerHour,
     activeRecently: cur.rooms > m30.rooms,
     stuck: !!old && old.depth === cur.depth && stuckRooms >= 120,
+    stalled,
     stuckRooms, stuckHours: old ? (now - old.at) / H : 0,
   };
 }
