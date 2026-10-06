@@ -458,7 +458,7 @@ test('market: uncommon listed with a slot kept for rare, sales reported', async 
   await game.login();
   store.setSetting('autoUpgrade', false);
   store.setSetting('salvageLevel', 0);
-  srv.state.items = { steel_stiletto: 1, frost_glaive: 1 };            // rare + uncommon spare
+  srv.state.items = { steel_stiletto: 1, frost_glaive: 1 };            // rare + uncommon spare (uncommon sold when salvageLevel is 0)
   srv.listings.push({ id: 'L6', itemId: 'frost_glaive', price: 900, at: 1, seller: 'Z' });
   srv.state.market = [1, 2, 3].map((i) => ({ id: 'old' + i, itemId: 'iron_sword', price: 50 }));
   await runRound(game, store);
@@ -483,4 +483,23 @@ test('stalled browser is reported once, then clears when rooms resume', async ()
   const quiet = new Store(tmp(), SECRET);
   for (let i = 0; i <= 18; i++) p = recordProgress(quiet, { at: t0 + i * 5 * M, rooms: 0, depth: 0, zone: 0, floor: 1 });
   assert.ok(!p.stalled, 'never active = AFK only, no alarm');
+});
+
+test('stale listings: uncommon pulled and salvaged, rare repriced under a cheaper rival', async () => {
+  const { srv, store, game } = setup();
+  await game.login();
+  store.setSetting('autoUpgrade', false);
+  const old = Math.floor(Date.now() / 1000) - 30 * 3600;
+  srv.state.items = {};
+  srv.state.market = [
+    { id: 'u1', itemId: 'frost_glaive', price: 388, at: old },
+    { id: 'r1', itemId: 'steel_stiletto', price: 9000, at: old },
+  ];
+  srv.listings.push({ id: 'c1', itemId: 'steel_stiletto', price: 4000, at: 1, seller: 'Rival' });
+  const { log } = await runRound(game, store);
+  assert.ok(srv.calls.some((c) => c.path === '/game/inventory/destroy' && c.body.itemId === 'frost_glaive'));
+  const relist = srv.calls.filter((c) => c.path === '/game/market/list').map((c) => c.body);
+  assert.deepEqual(relist, [{ itemId: 'steel_stiletto', price: 2999, actionId: relist[0].actionId }], 'one under the cheapest rival (3,000)');
+  assert.ok(log.some((l) => l.includes('Harga disesuaikan')));
+  assert.ok(!log.some((l) => l.includes('Terjual')), 'cancelled listings are not reported as sold');
 });

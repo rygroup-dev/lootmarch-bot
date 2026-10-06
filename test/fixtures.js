@@ -113,7 +113,12 @@ export function fakeServer({ state = makeState(), sessionCookie = 'lm_sid=abc', 
         srv.state.balances.Bone += bone; return wrap({ salvaged: { bone } });
       }
       case '/game/inventory/destroy': srv.state.items[body.itemId] -= body.qty; srv.state.balances.Bone += 30 * body.qty; return wrap({ bone: 30 * body.qty });
-      case '/game/market/list': srv.state.items[body.itemId]--; srv.state.market.push({ id: 'M' + srv.state.market.length, itemId: body.itemId, price: body.price }); return wrap();
+      case '/game/market/list': srv.state.items[body.itemId]--; srv.state.market.push({ id: 'M' + srv.calls.length, itemId: body.itemId, price: body.price, at: Math.floor(Date.now() / 1000) }); return wrap();
+      case '/game/market/cancel': {
+        const l = srv.state.market.find((x) => x.id === body.listingId);
+        srv.state.market = srv.state.market.filter((x) => x !== l);
+        srv.state.items[l.itemId] = (srv.state.items[l.itemId] || 0) + 1; return wrap();
+      }
       case '/game/character/attributes': {
         const c = srv.state.character; const add = Object.values(body.attributes).reduce((a, b) => a + b, 0);
         if (add > c.sp) return json(400, { error: 'NoPoints', message: 'Not enough attribute points.' });
