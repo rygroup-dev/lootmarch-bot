@@ -1,5 +1,9 @@
 # LootMarch Bot ⚔️
 
+🎮 **Main LootMarch:** https://lootmarch.xyz/play?ref=V49L3K &nbsp;·&nbsp; 📖 **Docs game:** https://lootmarch.xyz/docs
+
+<sub>Link di atas memakai kode referral pembuat bot (V49L3K): akun baru dapat bonus 600 $LM dari game, tidak memotong penghasilanmu. Link tanpa referral: https://lootmarch.xyz/play</sub>
+
 Panel kontrol Telegram untuk **satu akun** [LootMarch](https://lootmarch.xyz), game idle dungeon crawler di Robinhood Chain. Semua yang biasanya diklik di web bisa diatur dari Telegram, ditambah autopilot yang mengurus klaim harian dan memperkuat hero sambil kamu offline.
 
 ## Pasang (satu baris)
